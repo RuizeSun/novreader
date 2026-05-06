@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import '../models/user.dart';
@@ -7,7 +8,10 @@ import '../services/bangumi_service.dart';
 import '../services/token_holder.dart';
 
 class UserProvider with ChangeNotifier {
-  static const String _prefsKey = 'accessToken';
+  static const String _prefsKey =
+      'accessToken'; // used for SharedPreferences (user data)
+  static const String _secureTokenKey =
+      'secureAccessToken'; // key for secure storage
   static const String _userPrefsKey = 'currentUser';
 
   String? _accessToken;
@@ -23,8 +27,12 @@ class UserProvider with ChangeNotifier {
   }
 
   Future<void> _loadUser() async {
+    // Load token securely
+    final secureStorage = const FlutterSecureStorage();
+    final token = await secureStorage.read(key: _secureTokenKey);
+
+    // Load other user data from SharedPreferences (non-sensitive)
     final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString(_prefsKey);
     final userData = prefs.getString(_userPrefsKey);
 
     if (token != null) {
@@ -58,7 +66,9 @@ class UserProvider with ChangeNotifier {
       _accessToken = token;
       _currentUser = user;
 
-      await prefs.setString(_prefsKey, token);
+      // Store token securely
+      final secureStorage = const FlutterSecureStorage();
+      await secureStorage.write(key: _secureTokenKey, value: token);
       await prefs.setString(_userPrefsKey, jsonEncode(user.toJson()));
 
       notifyListeners();
@@ -74,8 +84,13 @@ class UserProvider with ChangeNotifier {
     _accessToken = null;
     _currentUser = null;
 
-    await prefs.remove(_prefsKey);
+    // 移除保存在 SharedPreferences 中的非敏感用户信息
     await prefs.remove(_userPrefsKey);
+
+    // 从安全存储中删除访问令牌
+    final secureStorage = const FlutterSecureStorage();
+    await secureStorage.delete(key: _secureTokenKey);
+
     // 清除全局 TokenHolder
     TokenHolder.accessToken = null;
 
