@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:novriidaa_reader/providers/theme_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({Key? key}) : super(key: key);
@@ -29,33 +30,39 @@ class SettingsPage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          Card(
-            margin: const EdgeInsets.symmetric(horizontal: 16),
-            child: ListTile(
-              leading: const Icon(Icons.info_outline),
-              title: const Text('关于'),
-              subtitle: const Text('NovReader v1.0.0'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () {
-                showAboutDialog(
-                  context: context,
-                  applicationName: 'NovReader',
-                  applicationVersion: '1.0.0',
-                  applicationIcon: const FlutterLogo(),
-                  children: [
-                    const Text('基于 Bangumi API 构建的小说阅读器'),
-                    const SizedBox(height: 8),
-                    Text(
-                      'API: https://bangumi.github.io/api/',
-                      style: TextStyle(
-                        color: Theme.of(context).primaryColor,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
+          FutureBuilder<PackageInfo>(
+            future: PackageInfo.fromPlatform(),
+            builder: (context, snapshot) {
+              final version = snapshot.data?.version ?? '1.0.0';
+              return Card(
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                child: ListTile(
+                  leading: const Icon(Icons.info_outline),
+                  title: const Text('关于'),
+                  subtitle: Text('NovReader v$version'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () {
+                    showAboutDialog(
+                      context: context,
+                      applicationName: 'NovReader',
+                      applicationVersion: version,
+                      applicationIcon: const FlutterLogo(),
+                      children: [
+                        const Text('基于 Bangumi API 构建的小说阅读器'),
+                        const SizedBox(height: 8),
+                        Text(
+                          'API: https://bangumi.github.io/api/',
+                          style: TextStyle(
+                            color: Theme.of(context).primaryColor,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              );
+            },
           ),
         ],
       ),

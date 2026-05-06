@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:ui'; // 导入以使用 ImageFilter
 import 'package:cached_network_image/cached_network_image.dart';
 import '../models/subject.dart';
 import '../models/related_person.dart';
@@ -151,9 +152,8 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
 
   Widget _buildPersonsSection() {
     if (_isPersonsLoading) {
-      // Show a compact loading indicator for the persons section
-      return Padding(
-        padding: const EdgeInsets.all(8.0),
+      return const Padding(
+        padding: EdgeInsets.all(8.0),
         child: Center(child: CircularProgressIndicator()),
       );
     }
@@ -170,7 +170,6 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
     }
 
     return Padding(
-      // Further reduce outer padding for the persons section
       padding: const EdgeInsets.all(4.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -182,7 +181,6 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
           const SizedBox(height: 4),
           LayoutBuilder(
             builder: (context, constraints) {
-              // Determine number of columns based on available width.
               int columns = (constraints.maxWidth / 200).floor();
               if (columns < 1) columns = 1;
               final int itemsPerRow = columns;
@@ -196,8 +194,6 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
                     physics: const NeverScrollableScrollPhysics(),
                     gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: columns,
-                      // Reduce spacing between grid items for a tighter layout
-                      // Tighter spacing between grid items
                       mainAxisSpacing: 2,
                       crossAxisSpacing: 2,
                       childAspectRatio: 4,
@@ -208,7 +204,6 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
                     itemBuilder: (context, index) {
                       final person = _persons[index];
                       return ListTile(
-                        // Make the list tile more compact
                         dense: true,
                         visualDensity: VisualDensity.compact,
                         contentPadding: const EdgeInsets.symmetric(
@@ -228,7 +223,6 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
                           ),
                         ),
                         title: Text(person.name),
-                        // Removed subtitle displaying career (e.g., "producer", "mangaka")
                         trailing: Text(person.relation),
                       );
                     },
@@ -270,9 +264,8 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
 
   Widget _buildCharactersSection() {
     if (_isCharactersLoading) {
-      // Show a compact loading indicator for the characters section
-      return Padding(
-        padding: const EdgeInsets.all(8.0),
+      return const Padding(
+        padding: EdgeInsets.all(8.0),
         child: Center(child: CircularProgressIndicator()),
       );
     }
@@ -289,7 +282,6 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
     }
 
     return Padding(
-      // Further reduce outer padding for the characters section
       padding: const EdgeInsets.all(4.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -301,7 +293,6 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
           const SizedBox(height: 4),
           LayoutBuilder(
             builder: (context, constraints) {
-              // Ensure at least two columns on typical mobile widths.
               int columns = (constraints.maxWidth / 180).floor();
               if (columns < 2) columns = 2;
               final int itemsPerRow = columns;
@@ -315,11 +306,8 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
                     physics: const NeverScrollableScrollPhysics(),
                     gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: columns,
-                      // Reduce spacing for a tighter layout.
-                      // Tighter spacing between character grid items
                       mainAxisSpacing: 0.5,
                       crossAxisSpacing: 1,
-                      // Adjust aspect ratio for a more flat and compact tile.
                       childAspectRatio: 2.8,
                     ),
                     itemCount: _isCharactersExpanded || !showExpandButton
@@ -328,8 +316,6 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
                     itemBuilder: (context, index) {
                       final character = _characters[index];
                       return ListTile(
-                        // Reduce padding to make the grid more compact on mobile.
-                        // Reduce padding inside each character tile for a more compact layout
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 4,
                           vertical: 2,
@@ -349,7 +335,6 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
                           ),
                         ),
                         title: Text(character.name),
-                        // Removed subtitle (character.summary) to keep each item compact.
                         trailing: Text(character.relation),
                         onTap: () async {
                           final go = await showDialog<bool>(
@@ -422,6 +407,23 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
     return SliverAppBar(
       expandedHeight: 300,
       pinned: true,
+      // 为返回按钮添加高斯模糊背景以提升可读性
+      leading: Padding(
+        padding: const EdgeInsets.all(8.0),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.3), // 稍微加深遮罩
+                shape: BoxShape.circle,
+              ),
+              child: const BackButton(color: Colors.white),
+            ),
+          ),
+        ),
+      ),
       flexibleSpace: FlexibleSpaceBar(
         background: Stack(
           fit: StackFit.expand,
@@ -527,7 +529,6 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
   }
 
   Widget _buildScoreRow() {
-    // Use Expanded for each score item to avoid overflow on narrow screens.
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0),
       child: Container(
