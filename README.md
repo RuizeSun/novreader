@@ -1,4 +1,4 @@
-# novriidaa_reader
+# novReader
 
 A novel reader.
 
