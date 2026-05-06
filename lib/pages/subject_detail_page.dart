@@ -56,6 +56,7 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
       final characters = await _bangumiService.getSubjectCharacters(
         widget.subjectId,
       );
+      if (!mounted) return;
       setState(() {
         _persons = persons;
         _characters = characters;
@@ -63,6 +64,7 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
         _isCharactersLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _personsError = e.toString();
         _charactersError = e.toString();
@@ -75,11 +77,13 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
   Future<void> _fetchSubject() async {
     try {
       final subject = await _bangumiService.getSubject(widget.subjectId);
+      if (!mounted) return;
       setState(() {
         _subject = subject;
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = e.toString();
         _isLoading = false;
@@ -90,6 +94,7 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
   Future<void> _loadFullDetails() async {
     try {
       final subject = await _bangumiService.getSubject(widget.subjectId);
+      if (!mounted) return;
       setState(() {
         _subject = subject;
       });

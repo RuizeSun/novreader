@@ -3,10 +3,22 @@ import 'package:html/parser.dart' as html_parser;
 import '../models/subject.dart';
 import '../models/related_person.dart';
 import '../models/related_character.dart';
+import '../models/user.dart';
 import 'api_client.dart';
+import 'token_holder.dart';
 
 class BangumiService {
   final ApiClient _apiClient = ApiClient();
+
+  /// 设置访问令牌
+  void setAccessToken(String? token) {
+    TokenHolder.accessToken = token;
+  }
+
+  /// 获取当前访问令牌
+  String? getAccessToken() {
+    return TokenHolder.accessToken;
+  }
 
   Future<List<Subject>> searchSubjects({
     required String keyword,
@@ -99,6 +111,20 @@ class BangumiService {
         tag: ['小说'],
       );
       return results;
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  /// 获取当前用户信息
+  Future<User> getCurrentUser() async {
+    try {
+      final response = await _apiClient.get('/v0/me');
+      if (response.statusCode == 200) {
+        return User.fromJson(response.data);
+      } else {
+        throw Exception('获取用户信息失败: ${response.statusCode}');
+      }
     } catch (e) {
       rethrow;
     }

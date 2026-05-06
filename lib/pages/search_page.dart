@@ -51,6 +51,7 @@ class _SearchPageState extends State<SearchPage> {
     final keyword = _searchController.text.trim();
     if (keyword.isEmpty) return;
 
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
       _error = null;
@@ -66,12 +67,14 @@ class _SearchPageState extends State<SearchPage> {
         offset: _offset,
         tag: ['小说'],
       );
+      if (!mounted) return;
       setState(() {
         _subjects = results;
         _hasMore = results.length >= _limit;
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = '搜索失败: $e';
         _isLoading = false;
@@ -83,6 +86,7 @@ class _SearchPageState extends State<SearchPage> {
   Future<void> _loadMore() async {
     if (!_hasMore || _isLoading) return;
 
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
     });
@@ -96,12 +100,14 @@ class _SearchPageState extends State<SearchPage> {
         offset: _offset,
         tag: ['小说'],
       );
+      if (!mounted) return;
       setState(() {
         _subjects.addAll(results);
         _hasMore = results.length >= _limit;
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
         _offset -= _limit;
@@ -111,6 +117,7 @@ class _SearchPageState extends State<SearchPage> {
 
   Future<void> _refresh() async {
     if (_currentKeyword.isEmpty) return;
+    if (!mounted) return;
     setState(() {
       _offset = 0;
       _hasMore = true;

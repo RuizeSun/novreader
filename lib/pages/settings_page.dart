@@ -15,6 +15,7 @@ class SettingsPage extends StatelessWidget {
       body: ListView(
         children: [
           const SizedBox(height: 16),
+          // 主题切换
           Card(
             margin: const EdgeInsets.symmetric(horizontal: 16),
             child: ListTile(
@@ -30,6 +31,9 @@ class SettingsPage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
+          // 账号相关设置已迁移至登录页，此处仅保留主题切换等设置
+          const SizedBox(height: 16),
+          // 关于信息
           FutureBuilder<PackageInfo>(
             future: PackageInfo.fromPlatform(),
             builder: (context, snapshot) {

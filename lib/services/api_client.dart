@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import '../config/api_config.dart';
+import 'token_holder.dart';
 
 class ApiClient {
   static final ApiClient _instance = ApiClient._internal();
@@ -16,6 +17,20 @@ class ApiClient {
         headers: {
           'User-Agent': ApiConfig.userAgent,
           'Accept': 'application/json',
+        },
+      ),
+    );
+
+    // 添加请求拦截器，自动添加访问令牌
+    _dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          // 使用全局 TokenHolder 获取当前 token
+          final token = TokenHolder.accessToken;
+          if (token != null) {
+            options.headers['Authorization'] = 'Bearer $token';
+          }
+          return handler.next(options);
         },
       ),
     );

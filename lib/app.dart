@@ -1,19 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'providers/theme_provider.dart';
+import 'providers/user_provider.dart';
 import 'pages/home_page.dart';
 import 'pages/search_page.dart';
 import 'pages/settings_page.dart';
+import 'pages/login_page.dart';
 
 class NovriidaaApp extends StatelessWidget {
   const NovriidaaApp({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (context) => ThemeProvider(),
-      child: Consumer<ThemeProvider>(
-        builder: (context, themeProvider, child) {
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider(create: (_) => UserProvider()),
+      ],
+      child: Consumer2<ThemeProvider, UserProvider>(
+        builder: (context, themeProvider, userProvider, child) {
           return MaterialApp(
             title: 'NovReader',
             theme: themeProvider.lightTheme,
@@ -23,6 +28,7 @@ class NovriidaaApp extends StatelessWidget {
             routes: {
               '/search': (context) => const SearchPage(),
               '/settings': (context) => const SettingsPage(),
+              '/login': (context) => const LoginPage(),
             },
           );
         },

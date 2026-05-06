@@ -5,6 +5,8 @@ import 'package:novriidaa_reader/widgets/subject_card.dart';
 import 'package:novriidaa_reader/widgets/search_bar.dart';
 import 'package:novriidaa_reader/pages/search_page.dart';
 import 'package:novriidaa_reader/pages/subject_detail_page.dart';
+import 'package:provider/provider.dart';
+import 'package:novriidaa_reader/providers/user_provider.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({Key? key}) : super(key: key);
@@ -54,12 +56,14 @@ class _HomePageState extends State<HomePage> {
 
     try {
       final results = await _bangumiService.fetchTrendingBooks();
+      if (!mounted) return;
       setState(() {
         _subjects = results;
         _hasMore = results.length >= _limit;
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = '加载失败: $e';
         _isLoading = false;
@@ -85,12 +89,14 @@ class _HomePageState extends State<HomePage> {
         sort: 'heat',
         tag: ['小说'],
       );
+      if (!mounted) return;
       setState(() {
         _subjects.addAll(results);
         _hasMore = results.length >= _limit;
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
         _offset -= _limit;
@@ -99,6 +105,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _refresh() async {
+    if (!mounted) return;
     setState(() {
       _offset = 0;
       _hasMore = true;
@@ -112,11 +119,31 @@ class _HomePageState extends State<HomePage> {
       appBar: AppBar(
         title: const Text('NovReader'),
         elevation: 0,
+        // 将账号按钮放在标题右侧的最右边，设置图标放在其左侧
         actions: [
+          // 设置入口图标（左侧）
           IconButton(
             icon: const Icon(Icons.settings),
             onPressed: () {
               Navigator.pushNamed(context, '/settings');
+            },
+          ),
+          // 账号按钮（头像或登录图标）
+          Consumer<UserProvider>(
+            builder: (context, userProvider, child) {
+              return IconButton(
+                icon: userProvider.isLoggedIn
+                    ? CircleAvatar(
+                        radius: 12,
+                        backgroundImage: NetworkImage(
+                          userProvider.currentUser?.avatar.large ?? '',
+                        ),
+                      )
+                    : const Icon(Icons.login),
+                onPressed: () {
+                  Navigator.pushNamed(context, '/login');
+                },
+              );
             },
           ),
         ],

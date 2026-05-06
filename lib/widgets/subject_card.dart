@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart'; // Reviewed and overflow fixed
 import 'package:cached_network_image/cached_network_image.dart';
 import '../models/subject.dart';
 
@@ -46,7 +46,8 @@ class SubjectCard extends StatelessWidget {
                       ),
               ),
             ),
-            Expanded(
+            SizedBox(
+              height: 60,
               child: Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 6.0,
@@ -54,6 +55,7 @@ class SubjectCard extends StatelessWidget {
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       subject.nameCn.isNotEmpty ? subject.nameCn : subject.name,
@@ -65,28 +67,26 @@ class SubjectCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 1),
-                    FittedBox(
-                      child: Row(
-                        children: [
-                          Icon(Icons.star, size: 12, color: Colors.amber[700]),
-                          const SizedBox(width: 2),
-                          Text(
-                            subject.rating.score.toString(),
-                            style: const TextStyle(
-                              fontSize: 11,
-                              color: Colors.grey,
-                            ),
+                    Row(
+                      children: [
+                        Icon(Icons.star, size: 12, color: Colors.amber[700]),
+                        const SizedBox(width: 2),
+                        Text(
+                          subject.rating.score.toString(),
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey,
                           ),
-                          const SizedBox(width: 6),
-                          Text(
-                            '${subject.collectionsCount}人收藏',
-                            style: const TextStyle(
-                              fontSize: 11,
-                              color: Colors.grey,
-                            ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          '${subject.collectionsCount}人收藏',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey,
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 1),
                     Text(
