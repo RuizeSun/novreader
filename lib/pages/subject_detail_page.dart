@@ -26,6 +26,8 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
   bool _isLoading = true;
   String? _error;
   bool _isSummaryExpanded = false;
+  bool _isPersonsExpanded = false;
+  bool _isCharactersExpanded = false;
   List<RelatedPerson> _persons = [];
   List<RelatedCharacter> _characters = [];
   bool _isPersonsLoading = true;
@@ -183,45 +185,81 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
               // Determine number of columns based on available width.
               int columns = (constraints.maxWidth / 200).floor();
               if (columns < 1) columns = 1;
-              return GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: columns,
-                  // Reduce spacing between grid items for a tighter layout
-                  // Tighter spacing between grid items
-                  mainAxisSpacing: 2,
-                  crossAxisSpacing: 2,
-                  childAspectRatio: 4,
-                ),
-                itemCount: _persons.length,
-                itemBuilder: (context, index) {
-                  final person = _persons[index];
-                  return ListTile(
-                    // Make the list tile more compact
-                    dense: true,
-                    visualDensity: VisualDensity.compact,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 4,
-                      vertical: 2,
+              final int itemsPerRow = columns;
+              final int rowCount = (_persons.length / itemsPerRow).ceil();
+              final bool showExpandButton = rowCount > 2;
+
+              return Column(
+                children: [
+                  GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: columns,
+                      // Reduce spacing between grid items for a tighter layout
+                      // Tighter spacing between grid items
+                      mainAxisSpacing: 2,
+                      crossAxisSpacing: 2,
+                      childAspectRatio: 4,
                     ),
-                    leading: ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: CachedNetworkImage(
-                        imageUrl: person.images.medium,
-                        width: 40,
-                        height: 40,
-                        fit: BoxFit.cover,
-                        alignment: Alignment.topCenter,
-                        errorWidget: (context, url, error) =>
-                            const Icon(Icons.person, size: 40),
+                    itemCount: _isPersonsExpanded || !showExpandButton
+                        ? _persons.length
+                        : itemsPerRow * 2,
+                    itemBuilder: (context, index) {
+                      final person = _persons[index];
+                      return ListTile(
+                        // Make the list tile more compact
+                        dense: true,
+                        visualDensity: VisualDensity.compact,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 2,
+                        ),
+                        leading: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: CachedNetworkImage(
+                            imageUrl: person.images.medium,
+                            width: 40,
+                            height: 40,
+                            fit: BoxFit.cover,
+                            alignment: Alignment.topCenter,
+                            errorWidget: (context, url, error) =>
+                                const Icon(Icons.person, size: 40),
+                          ),
+                        ),
+                        title: Text(person.name),
+                        // Removed subtitle displaying career (e.g., "producer", "mangaka")
+                        trailing: Text(person.relation),
+                      );
+                    },
+                  ),
+                  if (showExpandButton)
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 200),
+                      transitionBuilder:
+                          (Widget child, Animation<double> animation) {
+                            return FadeTransition(
+                              opacity: animation,
+                              child: child,
+                            );
+                          },
+                      child: InkWell(
+                        key: ValueKey<bool>(_isPersonsExpanded),
+                        onTap: () {
+                          setState(() {
+                            _isPersonsExpanded = !_isPersonsExpanded;
+                          });
+                        },
+                        child: Text(
+                          _isPersonsExpanded ? '收起' : '展开',
+                          style: const TextStyle(
+                            color: Colors.blue,
+                            fontSize: 13,
+                          ),
+                        ),
                       ),
                     ),
-                    title: Text(person.name),
-                    // Removed subtitle displaying career (e.g., "producer", "mangaka")
-                    trailing: Text(person.relation),
-                  );
-                },
+                ],
               );
             },
           ),
@@ -266,74 +304,112 @@ class _SubjectDetailPageState extends State<SubjectDetailPage> {
               // Ensure at least two columns on typical mobile widths.
               int columns = (constraints.maxWidth / 180).floor();
               if (columns < 2) columns = 2;
-              return GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: columns,
-                  // Reduce spacing for a tighter layout.
-                  // Tighter spacing between character grid items
-                  mainAxisSpacing: 0.5,
-                  crossAxisSpacing: 1,
-                  // Adjust aspect ratio for a more flat and compact tile.
-                  childAspectRatio: 2.8,
-                ),
-                itemCount: _characters.length,
-                itemBuilder: (context, index) {
-                  final character = _characters[index];
-                  return ListTile(
-                    // Reduce padding to make the grid more compact on mobile.
-                    // Reduce padding inside each character tile for a more compact layout
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 4,
-                      vertical: 2,
+              final int itemsPerRow = columns;
+              final int rowCount = (_characters.length / itemsPerRow).ceil();
+              final bool showExpandButton = rowCount > 2;
+
+              return Column(
+                children: [
+                  GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: columns,
+                      // Reduce spacing for a tighter layout.
+                      // Tighter spacing between character grid items
+                      mainAxisSpacing: 0.5,
+                      crossAxisSpacing: 1,
+                      // Adjust aspect ratio for a more flat and compact tile.
+                      childAspectRatio: 2.8,
                     ),
-                    dense: true,
-                    visualDensity: VisualDensity.compact,
-                    leading: ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: CachedNetworkImage(
-                        imageUrl: character.images.medium,
-                        width: 40,
-                        height: 40,
-                        fit: BoxFit.cover,
-                        alignment: Alignment.topCenter,
-                        errorWidget: (context, url, error) =>
-                            const Icon(Icons.person, size: 40),
+                    itemCount: _isCharactersExpanded || !showExpandButton
+                        ? _characters.length
+                        : itemsPerRow * 2,
+                    itemBuilder: (context, index) {
+                      final character = _characters[index];
+                      return ListTile(
+                        // Reduce padding to make the grid more compact on mobile.
+                        // Reduce padding inside each character tile for a more compact layout
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 2,
+                        ),
+                        dense: true,
+                        visualDensity: VisualDensity.compact,
+                        leading: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: CachedNetworkImage(
+                            imageUrl: character.images.medium,
+                            width: 40,
+                            height: 40,
+                            fit: BoxFit.cover,
+                            alignment: Alignment.topCenter,
+                            errorWidget: (context, url, error) =>
+                                const Icon(Icons.person, size: 40),
+                          ),
+                        ),
+                        title: Text(character.name),
+                        // Removed subtitle (character.summary) to keep each item compact.
+                        trailing: Text(character.relation),
+                        onTap: () async {
+                          final go = await showDialog<bool>(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: const Text('前往角色主页'),
+                              content: const Text('是否打开 Bangumi 角色页面？'),
+                              actions: [
+                                TextButton(
+                                  onPressed: () =>
+                                      Navigator.of(context).pop(false),
+                                  child: const Text('取消'),
+                                ),
+                                TextButton(
+                                  onPressed: () =>
+                                      Navigator.of(context).pop(true),
+                                  child: const Text('确定'),
+                                ),
+                              ],
+                            ),
+                          );
+                          if (go == true) {
+                            final url = Uri.parse(
+                              'https://bgm.tv/character/${character.id}',
+                            );
+                            if (await canLaunchUrl(url)) {
+                              await launchUrl(url);
+                            }
+                          }
+                        },
+                      );
+                    },
+                  ),
+                  if (showExpandButton)
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 200),
+                      transitionBuilder:
+                          (Widget child, Animation<double> animation) {
+                            return FadeTransition(
+                              opacity: animation,
+                              child: child,
+                            );
+                          },
+                      child: InkWell(
+                        key: ValueKey<bool>(_isCharactersExpanded),
+                        onTap: () {
+                          setState(() {
+                            _isCharactersExpanded = !_isCharactersExpanded;
+                          });
+                        },
+                        child: Text(
+                          _isCharactersExpanded ? '收起' : '展开',
+                          style: const TextStyle(
+                            color: Colors.blue,
+                            fontSize: 13,
+                          ),
+                        ),
                       ),
                     ),
-                    title: Text(character.name),
-                    // Removed subtitle (character.summary) to keep each item compact.
-                    trailing: Text(character.relation),
-                    onTap: () async {
-                      final go = await showDialog<bool>(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          title: const Text('前往角色主页'),
-                          content: const Text('是否打开 Bangumi 角色页面？'),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.of(context).pop(false),
-                              child: const Text('取消'),
-                            ),
-                            TextButton(
-                              onPressed: () => Navigator.of(context).pop(true),
-                              child: const Text('确定'),
-                            ),
-                          ],
-                        ),
-                      );
-                      if (go == true) {
-                        final url = Uri.parse(
-                          'https://bgm.tv/character/${character.id}',
-                        );
-                        if (await canLaunchUrl(url)) {
-                          await launchUrl(url);
-                        }
-                      }
-                    },
-                  );
-                },
+                ],
               );
             },
           ),
