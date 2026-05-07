@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'providers/theme_provider.dart';
 import 'providers/user_provider.dart';
-import 'pages/home_page.dart';
+import 'pages/main_page.dart';
 import 'pages/search_page.dart';
 import 'pages/settings_page.dart';
 import 'pages/login_page.dart';
@@ -24,7 +24,7 @@ class NovriidaaApp extends StatelessWidget {
             theme: themeProvider.lightTheme,
             darkTheme: themeProvider.darkTheme,
             themeMode: themeProvider.themeMode,
-            home: const HomePage(),
+            home: const MainPage(),
             routes: {
               '/search': (context) => const SearchPage(),
               '/settings': (context) => const SettingsPage(),

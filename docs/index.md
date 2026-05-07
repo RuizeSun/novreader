@@ -6,7 +6,8 @@
 
 | 模块                                                 | 说明                                                              |
 | ---------------------------------------------------- | ----------------------------------------------------------------- |
-| [首页 (HomePage)](home_page.md)                      | 展示热门书籍列表，支持下拉加载、刷新以及跳转到详情页              |
+| [推荐页 (RecommendPage)](home_page.md)               | 展示热门书籍列表，已迁移至底部导航栏的 “推荐” 页面                |
+| [书架页 (BookshelfPage)](bookshelf_page.md)          | 书架占位页面，后续可实现书架功能                                  |
 | [搜索页 (SearchPage)](search_page.md)                | 关键字搜索小说，展示网格列表                                      |
 | [详情页 (SubjectDetailPage)](subject_detail_page.md) | 展示小说的详细信息、评分、标签、人物角色等                        |
 | [设置页 (SettingsPage)](settings_page.md)            | 主题色、深色模式切换以及关于信息                                  |

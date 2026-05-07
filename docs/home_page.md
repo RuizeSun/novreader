@@ -1,4 +1,4 @@
-# HomePage (`lib/pages/home_page.dart`)
+# RecommendPage (`lib/pages/recommend_page.dart`)
 
 ## 文件概述
 
@@ -27,11 +27,11 @@ class _HomePageState extends State<HomePage> {
 }
 ```
 
-## 页面跳转
+## 页面跳转（已更新）
 
 - **搜索** – 点击搜索栏跳转到 `SearchPage`（`Navigator.push`）。
 - **详情** – 点击 `SubjectCard` 跳转到 `SubjectDetailPage`（`Navigator.push` 并传入 `subjectId` 与 `initialSubject`）。
-- **设置** – 右上角齿轮图标使用 `Navigator.pushNamed(context, '/settings')`。
+    - **设置** – 已从推荐页顶部移除，设置功能通过底部导航栏的 “设置” 标签页访问。
 - **登录** – 头像或登录图标使用 `Navigator.pushNamed(context, '/login')`。
 
 ## 网络请求
