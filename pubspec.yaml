@@ -41,7 +41,12 @@ dependencies:
     shared_preferences: ^2.5.5
     html: ^0.15.4
     url_launcher: ^6.2.0
-    package_info_plus: ^10.1.0
+    package_info_plus: ^9.0.1
+    file_picker: ^8.0.0
+    path_provider: ^2.1.2
+    # optional for richer txt rendering
+    flutter_html: ^3.0.0
+    charset_converter: ^2.0.0
 
 dev_dependencies:
     flutter_test:
