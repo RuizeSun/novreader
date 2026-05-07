@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart'; // Reviewed and overflow fixed
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:provider/provider.dart';
 import '../models/subject.dart';
+import '../providers/theme_provider.dart';
 
 class SubjectCard extends StatelessWidget {
   final Subject subject;
@@ -61,16 +63,22 @@ class SubjectCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        subject.nameCn.isNotEmpty
-                            ? subject.nameCn
-                            : subject.name,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      Consumer<ThemeProvider>(
+                        builder: (context, themeProvider, child) {
+                          final showChinese = themeProvider.showChineseTitle;
+                          final title = showChinese && subject.nameCn.isNotEmpty
+                              ? subject.nameCn
+                              : subject.name;
+                          return Text(
+                            title,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          );
+                        },
                       ),
                       const SizedBox(height: 1),
                       Row(

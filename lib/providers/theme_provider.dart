@@ -5,6 +5,7 @@ class ThemeProvider with ChangeNotifier {
   static const String _prefsKey = 'isDarkMode';
   static const String _colorKey = 'primaryColor';
   static const String _followSystemKey = 'followSystemAccent';
+  static const String _titleDisplayKey = 'showChineseTitle';
 
   bool _isDarkMode = false;
   bool get isDarkMode => _isDarkMode;
@@ -13,6 +14,8 @@ class ThemeProvider with ChangeNotifier {
   // 默认主色调为蓝色
   Color _primaryColor = const Color(0xFF6C63FF);
   bool _followSystemAccent = false;
+  // 是否在卡片上默认显示中文标题，默认 true
+  bool _showChineseTitle = true;
   Color get primaryColor => _primaryColor;
   bool get followSystemAccent => _followSystemAccent;
 
@@ -28,6 +31,7 @@ class ThemeProvider with ChangeNotifier {
       _primaryColor = Color(colorValue);
     }
     _followSystemAccent = prefs.getBool(_followSystemKey) ?? false;
+    _showChineseTitle = prefs.getBool(_titleDisplayKey) ?? true;
     notifyListeners();
   }
 
@@ -39,6 +43,16 @@ class ThemeProvider with ChangeNotifier {
     await prefs.setBool(_followSystemKey, _followSystemAccent);
     notifyListeners();
   }
+
+  /// 设置是否在卡片上默认显示中文标题并持久化
+  Future<void> setShowChineseTitle(bool show) async {
+    _showChineseTitle = show;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_titleDisplayKey, show);
+    notifyListeners();
+  }
+
+  bool get showChineseTitle => _showChineseTitle;
 
   /// 设置主题主色并持久化
   Future<void> setPrimaryColor(Color color) async {

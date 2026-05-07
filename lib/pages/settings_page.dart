@@ -226,6 +226,16 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ),
           const SizedBox(height: 24),
+          // 新增：标题显示切换（中文/原文）
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: SwitchListTile(
+              title: const Text('主页推荐小说卡片显示原语言标题'),
+              value: themeProvider.showChineseTitle,
+              onChanged: (value) => themeProvider.setShowChineseTitle(value),
+            ),
+          ),
+          const SizedBox(height: 12),
         ],
       ),
     );

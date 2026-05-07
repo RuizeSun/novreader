@@ -23,8 +23,10 @@ class _HomePageState extends State<HomePage> {
   bool _isLoading = false;
   bool _hasMore = true;
   String? _error;
-  int _offset = 0;
-  static const int _limit = 30;
+  // 分页页码，初始为 1
+  int _currentPage = 1;
+  // 每次请求的数量。增大此值可以在首次加载时填满屏幕，随后通过滚动继续加载。
+  static const int _limit = 50;
 
   @override
   void initState() {
@@ -55,7 +57,11 @@ class _HomePageState extends State<HomePage> {
     });
 
     try {
-      final results = await _bangumiService.fetchTrendingBooks();
+      // 使用爬虫方式获取热门书籍，确保首次加载能够填满屏幕
+      final results = await _bangumiService.fetchTrendingBooksScrape(
+        limit: _limit,
+        page: _currentPage,
+      );
       if (!mounted) return;
       setState(() {
         _subjects = results;
@@ -79,15 +85,13 @@ class _HomePageState extends State<HomePage> {
       _isLoading = true;
     });
 
-    _offset += _limit;
+    // 翻到下一页
+    _currentPage += 1;
 
     try {
-      final results = await _bangumiService.searchSubjects(
-        keyword: '小说',
+      final results = await _bangumiService.fetchTrendingBooksScrape(
         limit: _limit,
-        offset: _offset,
-        sort: 'heat',
-        tag: ['小说'],
+        page: _currentPage,
       );
       if (!mounted) return;
       setState(() {
@@ -99,7 +103,7 @@ class _HomePageState extends State<HomePage> {
       if (!mounted) return;
       setState(() {
         _isLoading = false;
-        _offset -= _limit;
+        _currentPage -= 1; // 回滚页码
       });
     }
   }
@@ -107,7 +111,8 @@ class _HomePageState extends State<HomePage> {
   Future<void> _refresh() async {
     if (!mounted) return;
     setState(() {
-      _offset = 0;
+      // 重置分页为第一页并重新加载
+      _currentPage = 1;
       _hasMore = true;
     });
     await _loadTrendingBooks();
