@@ -1,11 +1,14 @@
 import 'dart:io';
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart'; // for compute
+import 'package:flutter/gestures.dart';
+import 'package:flutter/foundation.dart';
+// 假設這些路徑與你的專案一致
 import '../models/book.dart';
 import '../utils/chapter_parser.dart';
 import '../services/book_repository.dart';
 
-/// 阅读页面，展示书籍内容并支持章节导航。
+/// 閱讀頁面：支持動態精確分頁、章節跳轉（目錄）與進度保存。
 class ReadingPage extends StatefulWidget {
   final Book book;
   const ReadingPage({Key? key, required this.book}) : super(key: key);
@@ -15,93 +18,401 @@ class ReadingPage extends StatefulWidget {
 }
 
 class _ReadingPageState extends State<ReadingPage> {
-  late Future<String> _contentFuture;
-  List<String> _chapters = [];
-  int _selectedChapter = 0;
-  String _currentText = '';
-  final ScrollController _scrollController = ScrollController();
+  late Future<void> _initTask;
   final BookRepository _repo = BookRepository();
+  late PageController _pageController;
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  // 內容相關
+  List<String> _chapters = [];
+  List<String> _chapterTitles = []; // 目錄標題
+  int _selectedChapter = 0;
+  List<String> _pages = [];
+  int _currentPage = 0;
+
+  // 狀態鎖
+  bool _isLoadingChapter = false;
+  bool _isAnimating = false;
+
+  // 進度保存防抖
+  Timer? _saveTimer;
+
+  // 字體樣式
+  final TextStyle _textStyle = const TextStyle(
+    fontSize: 18,
+    height: 1.6,
+    color: Colors.black87,
+    fontFamily: 'Roboto',
+  );
 
   @override
   void initState() {
     super.initState();
-    _contentFuture = _loadContent();
-    // Listen to scroll changes to persist reading progress.
-    _scrollController.addListener(_onScroll);
+    _pageController = PageController();
+    _initTask = _initializeReader();
   }
 
-  // Load the full text content of the book. We also attempt to split it into
-  // chapters using the existing `splitIntoChapters` utility. If chapters are
-  // detected, we keep the first chapter's content for initial display; otherwise
-  // we display the whole text.
-  // Helper for compute isolate.
+  @override
+  void dispose() {
+    _saveTimer?.cancel();
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  /// 初始化閱讀器
+  Future<void> _initializeReader() async {
+    try {
+      final String fullContent = await compute(_readFile, widget.book.filePath);
+      // 使用你的工具類解析章節
+      final List<String> parsedChapters = splitIntoChapters(fullContent);
+
+      _chapters = parsedChapters.isEmpty ? [fullContent] : parsedChapters;
+
+      // 提取目錄標題（取每章前 20 個字或第一行）
+      _chapterTitles = _chapters.map((content) {
+        String firstLine = content.trim().split('\n').first;
+        if (firstLine.length > 25) return '${firstLine.substring(0, 22)}...';
+        return firstLine.isEmpty ? "無標題章節" : firstLine;
+      }).toList();
+
+      // 恢復上次閱讀的章節（這裡假設 book 模型中有存儲 chapterIndex）
+      // 如果沒有，預設為 0
+      _selectedChapter = 0;
+
+      await _initialPagination();
+    } catch (e) {
+      debugPrint('加載失敗: $e');
+      _chapters = ['讀取文件失敗，請檢查路徑或權限。'];
+      _chapterTitles = ['錯誤'];
+      _paginateStatic('內容載入出錯');
+    }
+  }
+
   static Future<String> _readFile(String path) async =>
       File(path).readAsString();
 
-  Future<String> _loadContent() async {
-    // Use compute to avoid blocking the UI thread for large files.
-    final content = await compute(_readFile, widget.book.filePath);
-    _chapters = splitIntoChapters(content);
-    _currentText = content;
-    // Restore previous scroll offset if any.
+  /// 初始分頁
+  Future<void> _initialPagination() async {
+    await Future.delayed(Duration.zero);
+    if (!mounted) return;
+
+    final size = MediaQuery.of(context).size;
+    final padding = MediaQuery.of(context).padding;
+    // 扣除 UI 佔用高度
+    final double availableHeight =
+        size.height - kToolbarHeight - padding.top - 60;
+    final double availableWidth = size.width - 32;
+
+    _performPagination(
+      _chapters[_selectedChapter],
+      availableWidth,
+      availableHeight,
+    );
+
+    final savedPage = widget.book.readingProgress?.toInt() ?? 0;
+    _currentPage = savedPage.clamp(
+      0,
+      _pages.isNotEmpty ? _pages.length - 1 : 0,
+    );
+
+    setState(() {});
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final offset = widget.book.readingProgress ?? 0.0;
-      if (offset > 0 && _scrollController.hasClients) {
-        _scrollController.jumpTo(offset);
+      if (_pageController.hasClients) {
+        _pageController.jumpToPage(_currentPage);
       }
     });
-    return content;
   }
 
-  void _selectChapter(int index) {
+  /// 核心分頁算法
+  void _performPagination(String text, double width, double height) {
+    if (text.isEmpty) {
+      _pages = ['無內容'];
+      return;
+    }
+
+    final List<String> result = [];
+    final textPainter = TextPainter(
+      textDirection: TextDirection.ltr,
+      // 估算最大行數以優化效能
+      maxLines: (height / (_textStyle.fontSize! * _textStyle.height!)).floor(),
+    );
+
+    int start = 0;
+    while (start < text.length) {
+      int end = start + 2000; // 預取一段長度
+      if (end > text.length) end = text.length;
+
+      textPainter.text = TextSpan(
+        text: text.substring(start, end),
+        style: _textStyle,
+      );
+      textPainter.layout(maxWidth: width);
+
+      final TextPosition pos = textPainter.getPositionForOffset(
+        Offset(width, height),
+      );
+      int count = pos.offset;
+
+      if (count <= 0) count = 1;
+
+      result.add(text.substring(start, start + count));
+      start += count;
+    }
+    _pages = result;
+  }
+
+  /// 切換章節（供目錄跳轉與翻頁使用）
+  void _selectChapter(int index, {bool jumpToLast = false}) async {
+    if (index < 0 || index >= _chapters.length || _isLoadingChapter) return;
+
+    setState(() => _isLoadingChapter = true);
+
+    // 如果目錄打開著，先關閉目錄
+    if (_scaffoldKey.currentState?.isDrawerOpen ?? false) {
+      Navigator.pop(context);
+    }
+
+    // 延遲一點點確保 UI 渲染（如果從 Drawer 跳轉需要時間關閉選單）
+    await Future.delayed(const Duration(milliseconds: 100));
+
+    // 獲取容器尺寸
+    final size = MediaQuery.of(context).size;
+    final padding = MediaQuery.of(context).padding;
+    final double availableHeight =
+        size.height - kToolbarHeight - padding.top - 60;
+    final double availableWidth = size.width - 32;
+
+    _performPagination(_chapters[index], availableWidth, availableHeight);
+
+    final targetPage = jumpToLast ? (_pages.length - 1) : 0;
+
     setState(() {
       _selectedChapter = index;
-      _currentText = _chapters[index];
+      _currentPage = targetPage;
+      _isLoadingChapter = false;
     });
-    // When switching chapters, reset scroll position and persist.
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.jumpTo(0);
-        _saveProgress(0);
+      if (_pageController.hasClients) {
+        _pageController.jumpToPage(targetPage);
       }
+      _isAnimating = false;
     });
   }
 
-  // Persist the current scroll offset to the book model.
-  void _onScroll() {
-    if (!_scrollController.hasClients) return;
-    final offset = _scrollController.offset;
-    _saveProgress(offset);
+  void _paginateStatic(String msg) {
+    setState(() {
+      _pages = [msg];
+      _currentPage = 0;
+    });
   }
 
-  void _saveProgress(double offset) async {
-    final updated = widget.book.copyWith(readingProgress: offset);
-    await _repo.updateBook(updated);
+  void _onPageChanged(int index) {
+    setState(() {
+      _currentPage = index;
+    });
+    _debounceSaveProgress(index.toDouble());
+  }
+
+  void _debounceSaveProgress(double page) {
+    _saveTimer?.cancel();
+    _saveTimer = Timer(const Duration(seconds: 1), () async {
+      // 這裡可以同時保存 _selectedChapter
+      final updated = widget.book.copyWith(readingProgress: page);
+      await _repo.updateBook(updated);
+    });
+  }
+
+  void _goPrev() {
+    if (_isAnimating || _isLoadingChapter) return;
+    if (_currentPage > 0) {
+      _isAnimating = true;
+      _pageController
+          .previousPage(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+          )
+          .then((_) => _isAnimating = false);
+    } else if (_selectedChapter > 0) {
+      _selectChapter(_selectedChapter - 1, jumpToLast: true);
+    }
+  }
+
+  void _goNext() {
+    if (_isAnimating || _isLoadingChapter) return;
+    if (_currentPage < _pages.length - 1) {
+      _isAnimating = true;
+      _pageController
+          .nextPage(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+          )
+          .then((_) => _isAnimating = false);
+    } else if (_selectedChapter < _chapters.length - 1) {
+      _selectChapter(_selectedChapter + 1);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.book.title)),
-      body: FutureBuilder<String>(
-        future: _contentFuture,
+      key: _scaffoldKey,
+      backgroundColor: const Color(0xFFF5F5D1),
+      appBar: AppBar(
+        title: Text(widget.book.title, style: const TextStyle(fontSize: 16)),
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+        foregroundColor: Colors.black87,
+        leading: IconButton(
+          icon: const Icon(Icons.menu),
+          onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+        ),
+        actions: [
+          Center(child: Text('第 ${_selectedChapter + 1} 章 ')),
+          IconButton(icon: const Icon(Icons.chevron_left), onPressed: _goPrev),
+          IconButton(icon: const Icon(Icons.chevron_right), onPressed: _goNext),
+        ],
+      ),
+      // --- 新增目錄 Drawer ---
+      drawer: Drawer(
+        child: Column(
+          children: [
+            DrawerHeader(
+              decoration: const BoxDecoration(color: Color(0xFFE6E6B8)),
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.book, size: 40, color: Colors.brown),
+                    const SizedBox(height: 10),
+                    Text(
+                      widget.book.title,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      '共 ${_chapters.length} 章',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Expanded(
+              child: ListView.builder(
+                itemCount: _chapterTitles.length,
+                itemBuilder: (context, index) {
+                  bool isSelected = _selectedChapter == index;
+                  return ListTile(
+                    leading: CircleAvatar(
+                      radius: 12,
+                      backgroundColor: isSelected
+                          ? Colors.brown
+                          : Colors.grey[300],
+                      child: Text(
+                        '${index + 1}',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: isSelected ? Colors.white : Colors.black,
+                        ),
+                      ),
+                    ),
+                    title: Text(
+                      _chapterTitles[index],
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: isSelected ? Colors.brown : Colors.black87,
+                        fontWeight: isSelected
+                            ? FontWeight.bold
+                            : FontWeight.normal,
+                      ),
+                    ),
+                    selected: isSelected,
+                    onTap: () => _selectChapter(index),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+      // --- 內容區域 ---
+      body: FutureBuilder(
+        future: _initTask,
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          if (snapshot.connectionState != ConnectionState.done) {
             return const Center(child: CircularProgressIndicator());
           }
-          if (snapshot.hasError) {
-            return Center(child: Text('加载失败: ${snapshot.error}'));
+
+          if (_isLoadingChapter) {
+            return const Center(
+              child: CircularProgressIndicator(strokeWidth: 2),
+            );
           }
-          // Simple reading view: display the full text content. If chapter
-          // navigation is desired in the future, a drawer or side panel can be
-          // added, but the primary goal is to show the book's text.
-          return SingleChildScrollView(
-            controller: _scrollController,
-            padding: const EdgeInsets.all(16),
-            child: Text(
-              _currentText,
-              style: const TextStyle(fontSize: 16, height: 1.6),
-            ),
+
+          return Column(
+            children: [
+              Expanded(
+                child: Listener(
+                  onPointerSignal: (event) {
+                    if (event is PointerScrollEvent) {
+                      if (event.scrollDelta.dy > 50)
+                        _goNext();
+                      else if (event.scrollDelta.dy < -50)
+                        _goPrev();
+                    }
+                  },
+                  child: PageView.builder(
+                    controller: _pageController,
+                    onPageChanged: _onPageChanged,
+                    itemCount: _pages.length,
+                    physics: _isLoadingChapter
+                        ? const NeverScrollableScrollPhysics()
+                        : const BouncingScrollPhysics(),
+                    itemBuilder: (context, index) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16.0,
+                          vertical: 8.0,
+                        ),
+                        child: SelectableText(_pages[index], style: _textStyle),
+                      );
+                    },
+                  ),
+                ),
+              ),
+              // 底部狀態欄
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16.0,
+                  vertical: 10.0,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.03),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '章節進度: ${_currentPage + 1} / ${_pages.length}',
+                      style: TextStyle(
+                        color: Colors.grey[700],
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    Text(
+                      '全書: ${((_selectedChapter / _chapters.length) * 100).toStringAsFixed(1)}%',
+                      style: TextStyle(color: Colors.grey[700], fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           );
         },
       ),
