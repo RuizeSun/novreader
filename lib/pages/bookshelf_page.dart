@@ -7,6 +7,10 @@ import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import '../models/book.dart';
 import '../services/book_repository.dart';
+import '../services/bangumi_service.dart';
+import '../models/subject.dart';
+import '../widgets/subject_card.dart';
+import '../widgets/bookshelf_item_card.dart';
 import 'reading_page.dart';
 
 /// 书架页面，实现导入 txt、关联 Bangumi、阅读功能。
@@ -76,33 +80,103 @@ class _BookshelfPageState extends State<BookshelfPage> {
     await _loadBooks();
   }
 
-  /// 关联 Bangumi 书目（简化实现：仅弹出输入框获取 subjectId）
-  Future<void> _linkBangumi(Book book) async {
+  /// 关联 Bangumi 书目（通过搜索书名并选择）
+  Future<void> _searchAndLinkBangumi(Book book) async {
     final controller = TextEditingController();
-    final subjectIdStr = await showDialog<String>(
+    List<Subject> results = [];
+    bool isLoading = false;
+    String? error;
+
+    await showDialog<void>(
       context: context,
-      builder: (c) => AlertDialog(
-        title: const Text('输入 Bangumi Subject ID'),
-        content: TextField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(c),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(c, controller.text),
-            child: const Text('确定'),
-          ),
-        ],
+      builder: (c) => StatefulBuilder(
+        builder: (c, setState) {
+          Future<void> _performSearch() async {
+            final keyword = controller.text.trim();
+            if (keyword.isEmpty) return;
+            setState(() {
+              isLoading = true;
+              error = null;
+            });
+            try {
+              final subjects = await BangumiService().searchSubjects(
+                keyword: keyword,
+                limit: 30,
+                tag: ['小说'],
+              );
+              setState(() {
+                results = subjects;
+              });
+            } catch (e) {
+              setState(() {
+                error = e.toString();
+              });
+            } finally {
+              setState(() {
+                isLoading = false;
+              });
+            }
+          }
+
+          return AlertDialog(
+            title: const Text('搜索 Bangumi 书籍'),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: controller,
+                    decoration: const InputDecoration(hintText: '输入书名关键词'),
+                    onSubmitted: (_) => _performSearch(),
+                  ),
+                  const SizedBox(height: 8),
+                  if (isLoading)
+                    const Center(child: CircularProgressIndicator()),
+                  if (error != null)
+                    Text(error!, style: const TextStyle(color: Colors.red)),
+                  if (!isLoading && results.isNotEmpty)
+                    SizedBox(
+                      height: 300,
+                      child: GridView.builder(
+                        shrinkWrap: true,
+                        gridDelegate:
+                            const SliverGridDelegateWithMaxCrossAxisExtent(
+                              maxCrossAxisExtent: 200,
+                              mainAxisSpacing: 8,
+                              crossAxisSpacing: 8,
+                              childAspectRatio: 0.6,
+                            ),
+                        itemCount: results.length,
+                        itemBuilder: (c, i) {
+                          final sub = results[i];
+                          return BookshelfItemCard(
+                            subject: sub,
+                            onTap: () async {
+                              final updated = book.copyWith(
+                                bangumiSubjectId: sub.id,
+                              );
+                              await _repo.updateBook(updated);
+                              await _loadBooks();
+                              Navigator.of(c).pop();
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(c).pop(),
+                child: const Text('取消'),
+              ),
+            ],
+          );
+        },
       ),
     );
-    if (subjectIdStr == null || subjectIdStr.isEmpty) return;
-    final updated = book.copyWith(bangumiSubjectId: int.tryParse(subjectIdStr));
-    await _repo.updateBook(updated);
-    await _loadBooks();
   }
 
   /// 删除书籍
@@ -126,37 +200,82 @@ class _BookshelfPageState extends State<BookshelfPage> {
               itemCount: _books.length,
               itemBuilder: (c, i) {
                 final book = _books[i];
-                return ListTile(
-                  title: Text(book.title),
-                  subtitle: book.bangumiSubjectId != null
-                      ? Text('Bangumi ID: ${book.bangumiSubjectId}')
-                      : const Text('未关联 Bangumi'),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.link),
-                        tooltip: '关联 Bangumi',
-                        onPressed: () => _linkBangumi(book),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.book),
-                        tooltip: '阅读',
-                        onPressed: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => ReadingPage(book: book),
+                if (book.bangumiSubjectId != null) {
+                  return FutureBuilder<Subject>(
+                    future: BangumiService().getSubject(book.bangumiSubjectId!),
+                    builder: (c, snapshot) {
+                      if (snapshot.connectionState != ConnectionState.done) {
+                        return const ListTile(title: Text('加载中...'));
+                      }
+                      if (snapshot.hasError || !snapshot.hasData) {
+                        return ListTile(
+                          title: Text(book.title),
+                          subtitle: const Text('获取封面失败'),
+                        );
+                      }
+                      final sub = snapshot.data!;
+                      return Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          BookshelfItemCard(
+                            subject: sub,
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => ReadingPage(book: book),
+                              ),
+                            ),
+                          ),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.link),
+                                tooltip: '重新关联 Bangumi',
+                                onPressed: () => _searchAndLinkBangumi(book),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete),
+                                tooltip: '删除',
+                                onPressed: () => _deleteBook(book.id),
+                              ),
+                            ],
+                          ),
+                        ],
+                      );
+                    },
+                  );
+                } else {
+                  return ListTile(
+                    title: Text(book.title),
+                    subtitle: const Text('未关联 Bangumi'),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.link),
+                          tooltip: '关联 Bangumi',
+                          onPressed: () => _searchAndLinkBangumi(book),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.book),
+                          tooltip: '阅读',
+                          onPressed: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ReadingPage(book: book),
+                            ),
                           ),
                         ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete),
-                        tooltip: '删除',
-                        onPressed: () => _deleteBook(book.id),
-                      ),
-                    ],
-                  ),
-                );
+                        IconButton(
+                          icon: const Icon(Icons.delete),
+                          tooltip: '删除',
+                          onPressed: () => _deleteBook(book.id),
+                        ),
+                      ],
+                    ),
+                  );
+                }
               },
             ),
     );
