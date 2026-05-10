@@ -36,7 +36,7 @@ class _BookshelfPageState extends State<BookshelfPage> {
     setState(() => _books = books);
   }
 
-  /// 导入本地 txt 文件并保存到应用文档目录
+  /// 导入本地 txt 文件并保存到适当的应用支持目录（跨平台）
   Future<void> _importTxt() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
@@ -65,8 +65,19 @@ class _BookshelfPageState extends State<BookshelfPage> {
       }
     }
 
-    // Save as UTF-8 in app documents directory
-    final appDir = await getApplicationDocumentsDirectory();
+    // Determine appropriate storage directory based on platform
+    Future<Directory> _getStorageDirectory() async {
+      if (Platform.isAndroid) {
+        // Prefer external storage directory on Android for user-accessible files
+        final externalDir = await getExternalStorageDirectory();
+        // Fallback to application support directory if external is unavailable
+        return externalDir ?? await getApplicationSupportDirectory();
+      }
+      // For iOS, Windows, macOS, Linux and others, use application support directory
+      return await getApplicationSupportDirectory();
+    }
+
+    final appDir = await _getStorageDirectory();
     final destPath =
         '${appDir.path}/${DateTime.now().millisecondsSinceEpoch}_${file.uri.pathSegments.last}';
     await File(destPath).writeAsString(content, encoding: utf8);
