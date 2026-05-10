@@ -82,14 +82,41 @@ class _ReadingPageState extends State<ReadingPage> {
       await _initialPagination();
     } catch (e) {
       debugPrint('加載失敗: $e');
-      _chapters = ['讀取文件失敗，請檢查路徑或權限。'];
+      final errorMsg = _formatErrorMessage(e);
+      _chapters = [errorMsg];
       _chapterTitles = ['錯誤'];
-      _paginateStatic('內容載入出錯');
+      _paginateStatic(errorMsg);
     }
   }
 
   static Future<String> _readFile(String path) async =>
       File(path).readAsString();
+
+  /// 格式化錯誤訊息，顯示具體的錯誤類型和原因
+  String _formatErrorMessage(Object e) {
+    final String errorType = e.runtimeType.toString();
+    final String errorMsg = e.toString();
+
+    // 提取錯誤類型名稱（去掉 "Exception" 或 "Error" 後綴以更簡潔）
+    String readableType = errorType;
+    if (readableType.endsWith('Exception')) {
+      readableType = readableType.substring(0, readableType.length - 9);
+    } else if (readableType.endsWith('Error')) {
+      readableType = readableType.substring(0, readableType.length - 5);
+    }
+
+    // 針對常見的文件操作錯誤提供更友好的說明
+    if (e is PathNotFoundException) {
+      return '加载失败：无法打开文件\n路径：${e.path}\n——OSError: ${e.message}';
+    } else if (e is FileSystemException) {
+      return '加载失败：文件系统错误\n路径：${e.path}\n——OSError: ${e.message}';
+    } else if (e is FormatException) {
+      return '加载失败：文件格式错误\n——FormatException: ${e.message}';
+    }
+
+    // 通用錯誤格式
+    return '加载失败：$readableType\n——$errorMsg';
+  }
 
   /// 初始分頁
   Future<void> _initialPagination() async {
@@ -265,10 +292,15 @@ class _ReadingPageState extends State<ReadingPage> {
         backgroundColor: Colors.transparent,
         foregroundColor: Colors.black87,
         leading: IconButton(
-          icon: const Icon(Icons.menu),
-          onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.of(context).pop(),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.menu),
+            onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+            tooltip: '目录',
+          ),
           Center(child: Text('第 ${_selectedChapter + 1} 章 ')),
           IconButton(icon: const Icon(Icons.chevron_left), onPressed: _goPrev),
           IconButton(icon: const Icon(Icons.chevron_right), onPressed: _goNext),
