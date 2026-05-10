@@ -1,3 +1,13 @@
+import java.util.Properties
+import java.io.FileInputStream
+
+// 定义 keyProperties 变量
+val keyProperties = Properties()
+val keyPropertiesFile = rootProject.file("key.properties")
+if (keyPropertiesFile.exists()) {
+    keyProperties.load(FileInputStream(keyPropertiesFile))
+}
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -9,6 +19,15 @@ android {
     namespace = "com.novriidaa.novriidaa_reader"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
+
+    signingConfigs {
+        create("release") {
+            keyAlias = keyProperties.getProperty("keyAlias")
+            keyPassword = keyProperties.getProperty("keyPassword")
+            storeFile = keyProperties.getProperty("storeFile")?.let { file(it) }
+            storePassword = keyProperties.getProperty("storePassword")
+        }
+    }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

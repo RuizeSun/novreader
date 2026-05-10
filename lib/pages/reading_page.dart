@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/foundation.dart';
+import 'package:provider/provider.dart';
+import 'package:novriidaa_reader/providers/theme_provider.dart';
 // 假設這些路徑與你的專案一致
 import '../models/book.dart';
 import '../utils/chapter_parser.dart';
@@ -29,6 +31,8 @@ class _ReadingPageState extends State<ReadingPage> {
   int _selectedChapter = 0;
   List<String> _pages = [];
   int _currentPage = 0;
+  String _currentChapterTitle = ''; // 当前章节标题（不含正文）
+  String _currentChapterBody = ''; // 当前章节正文（不含标题行）
 
   // 狀態鎖
   bool _isLoadingChapter = false;
@@ -37,13 +41,18 @@ class _ReadingPageState extends State<ReadingPage> {
   // 進度保存防抖
   Timer? _saveTimer;
 
-  // 字體樣式
-  final TextStyle _textStyle = const TextStyle(
-    fontSize: 18,
-    height: 1.6,
+  // 文字樣式將根據 ThemeProvider 中的閱讀設定動態生成
+  ThemeProvider? _themeProvider;
+  TextStyle get _textStyle => TextStyle(
+    fontSize: _themeProvider?.readingFontSize ?? 18,
+    height: _themeProvider?.readingLineHeight ?? 1.6,
     color: Colors.black87,
     fontFamily: 'Roboto',
   );
+
+  // 用於檢測佈局尺寸變化
+  double _lastLayoutWidth = 0;
+  double _lastLayoutHeight = 0;
 
   @override
   void initState() {
@@ -78,6 +87,9 @@ class _ReadingPageState extends State<ReadingPage> {
       // 恢復上次閱讀的章節（這裡假設 book 模型中有存儲 chapterIndex）
       // 如果沒有，預設為 0
       _selectedChapter = 0;
+
+      // 提取第一章的标题和正文
+      _extractChapterTitleAndBody(_selectedChapter);
 
       await _initialPagination();
     } catch (e) {
@@ -123,19 +135,8 @@ class _ReadingPageState extends State<ReadingPage> {
     await Future.delayed(Duration.zero);
     if (!mounted) return;
 
-    final size = MediaQuery.of(context).size;
-    final padding = MediaQuery.of(context).padding;
-    // 扣除 UI 佔用高度
-    final double availableHeight =
-        size.height - kToolbarHeight - padding.top - 60;
-    final double availableWidth = size.width - 32;
-
-    _performPagination(
-      _chapters[_selectedChapter],
-      availableWidth,
-      availableHeight,
-    );
-
+    // 分頁由 LayoutBuilder 在首次佈局時處理
+    // 此處僅恢復閱讀進度
     final savedPage = widget.book.readingProgress?.toInt() ?? 0;
     _currentPage = savedPage.clamp(
       0,
@@ -174,10 +175,11 @@ class _ReadingPageState extends State<ReadingPage> {
         text: text.substring(start, end),
         style: _textStyle,
       );
-      textPainter.layout(maxWidth: width);
+      // 减去 2px 余量，防止 TextPainter 与 SelectableText 渲染精度差异导致的水平溢出
+      textPainter.layout(maxWidth: width - 2);
 
       final TextPosition pos = textPainter.getPositionForOffset(
-        Offset(width, height),
+        Offset(width - 2, height),
       );
       int count = pos.offset;
 
@@ -187,6 +189,15 @@ class _ReadingPageState extends State<ReadingPage> {
       start += count;
     }
     _pages = result;
+  }
+
+  /// 从章节内容中提取标题行和正文
+  void _extractChapterTitleAndBody(int index) {
+    if (index < 0 || index >= _chapters.length) return;
+    final String content = _chapters[index];
+    final List<String> lines = content.trim().split('\n');
+    _currentChapterTitle = lines.isNotEmpty ? lines.first : '';
+    _currentChapterBody = lines.length > 1 ? lines.sublist(1).join('\n') : '';
   }
 
   /// 切換章節（供目錄跳轉與翻頁使用）
@@ -203,14 +214,22 @@ class _ReadingPageState extends State<ReadingPage> {
     // 延遲一點點確保 UI 渲染（如果從 Drawer 跳轉需要時間關閉選單）
     await Future.delayed(const Duration(milliseconds: 100));
 
-    // 獲取容器尺寸
-    final size = MediaQuery.of(context).size;
-    final padding = MediaQuery.of(context).padding;
-    final double availableHeight =
-        size.height - kToolbarHeight - padding.top - 60;
-    final double availableWidth = size.width - 32;
+    // 提取标题和正文
+    _extractChapterTitleAndBody(index);
 
-    _performPagination(_chapters[index], availableWidth, availableHeight);
+    // 使用 LayoutBuilder 已捕獲的佈局尺寸，確保與窗口自適應邏輯一致
+    _performPagination(
+      _currentChapterBody,
+      _lastLayoutWidth > 0
+          ? _lastLayoutWidth
+          : (MediaQuery.of(context).size.width - 32),
+      _lastLayoutHeight > 0
+          ? _lastLayoutHeight
+          : (MediaQuery.of(context).size.height -
+                kToolbarHeight -
+                MediaQuery.of(context).padding.top -
+                60),
+    );
 
     final targetPage = jumpToLast ? (_pages.length - 1) : 0;
 
@@ -268,7 +287,7 @@ class _ReadingPageState extends State<ReadingPage> {
 
   void _goNext() {
     if (_isAnimating || _isLoadingChapter) return;
-    if (_currentPage < _pages.length - 1) {
+    if (_currentPage < _displayPageCount - 1) {
       _isAnimating = true;
       _pageController
           .nextPage(
@@ -281,8 +300,126 @@ class _ReadingPageState extends State<ReadingPage> {
     }
   }
 
+  // Build the page view, supporting optional double‑column layout based on ThemeProvider settings.
+  Widget _buildPageView(BoxConstraints constraints, ThemeProvider provider) {
+    // 判斷是否啟用雙欄以及螢幕寬度是否達到觸發阈值。
+    final bool useDoubleColumn =
+        provider.doubleColumnEnabled &&
+        constraints.maxWidth >= provider.doubleColumnTriggerWidth;
+
+    if (useDoubleColumn) {
+      // 双栏实现：每页显示两个连续的分页项，左右各一栏
+      final int pageCount = (_pages.length + 1) ~/ 2;
+      return PageView.builder(
+        controller: _pageController,
+        onPageChanged: _onPageChanged,
+        itemCount: pageCount,
+        physics: _isLoadingChapter
+            ? const NeverScrollableScrollPhysics()
+            : const BouncingScrollPhysics(),
+        itemBuilder: (context, index) {
+          final int leftIndex = index * 2;
+          final int rightIndex = index * 2 + 1;
+          final String leftText = leftIndex < _pages.length
+              ? _pages[leftIndex]
+              : '';
+          final String rightText = rightIndex < _pages.length
+              ? _pages[rightIndex]
+              : '';
+          // 仅在每章首页显示章节标题
+          final bool isFirstPage = index == 0;
+          final String chapterTitle = isFirstPage ? _currentChapterTitle : '';
+          return Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 16.0,
+              vertical: 8.0,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (chapterTitle.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12.0),
+                    child: Text(
+                      chapterTitle,
+                      style: TextStyle(
+                        fontSize: provider.readingTitleFontSize,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                        fontFamily: 'Roboto',
+                      ),
+                    ),
+                  ),
+                Expanded(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.topLeft,
+                          child: SelectableText(leftText, style: _textStyle),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.topLeft,
+                          child: SelectableText(rightText, style: _textStyle),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    }
+
+    // 單欄默認實現。
+    return PageView.builder(
+      controller: _pageController,
+      onPageChanged: _onPageChanged,
+      itemCount: _pages.length,
+      physics: _isLoadingChapter
+          ? const NeverScrollableScrollPhysics()
+          : const BouncingScrollPhysics(),
+      itemBuilder: (context, index) {
+        // 仅在每章首页显示章节标题
+        final bool isFirstPage = index == 0;
+        final String chapterTitle = isFirstPage ? _currentChapterTitle : '';
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (chapterTitle.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12.0),
+                  child: Text(
+                    chapterTitle,
+                    style: TextStyle(
+                      fontSize: provider.readingTitleFontSize,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                      fontFamily: 'Roboto',
+                    ),
+                  ),
+                ),
+              Expanded(child: SelectableText(_pages[index], style: _textStyle)),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    // 保存 provider 以供 _textStyle getter 使用
+    _themeProvider = themeProvider;
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: const Color(0xFFF5F5D1),
@@ -356,7 +493,7 @@ class _ReadingPageState extends State<ReadingPage> {
                     title: Text(
                       _chapterTitles[index],
                       style: TextStyle(
-                        fontSize: 14,
+                        fontSize: themeProvider.readingTitleFontSize,
                         color: isSelected ? Colors.brown : Colors.black87,
                         fontWeight: isSelected
                             ? FontWeight.bold
@@ -389,32 +526,82 @@ class _ReadingPageState extends State<ReadingPage> {
           return Column(
             children: [
               Expanded(
-                child: Listener(
-                  onPointerSignal: (event) {
-                    if (event is PointerScrollEvent) {
-                      if (event.scrollDelta.dy > 50)
-                        _goNext();
-                      else if (event.scrollDelta.dy < -50)
-                        _goPrev();
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final double availableWidth = constraints.maxWidth - 32;
+                    final double availableHeight = constraints.maxHeight;
+
+                    // 檢測尺寸變化，重新分頁以適應新窗口大小
+                    if (availableWidth != _lastLayoutWidth ||
+                        availableHeight != _lastLayoutHeight) {
+                      _lastLayoutWidth = availableWidth;
+                      _lastLayoutHeight = availableHeight;
+                      if (_chapters.isNotEmpty) {
+                        final bool useDoubleColumn =
+                            themeProvider.doubleColumnEnabled &&
+                            constraints.maxWidth >=
+                                themeProvider.doubleColumnTriggerWidth;
+                        // 统一减去垂直 padding（16px）和标题高度
+                        double adjustedHeight = availableHeight;
+                        adjustedHeight -=
+                            16.0; // Column 垂直 padding（8px top + 8px bottom）
+                        if (_currentChapterTitle.isNotEmpty) {
+                          adjustedHeight -=
+                              (themeProvider.readingTitleFontSize + 12.0);
+                        }
+                        // 双栏模式下用列宽重新分页，每页文字正好填满一栏高度
+                        final double paginateWidth = useDoubleColumn
+                            ? (availableWidth - 16) / 2
+                            : availableWidth;
+                        _performPagination(
+                          _currentChapterBody,
+                          paginateWidth,
+                          adjustedHeight,
+                        );
+                        // 在下一幀更新 UI 並修正當前頁碼
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (!mounted) return;
+                          final int maxPage = useDoubleColumn
+                              ? ((_pages.length + 1) ~/ 2) - 1
+                              : _pages.length - 1;
+                          final clampedPage = _currentPage.clamp(0, maxPage);
+                          if (clampedPage != _currentPage) {
+                            _currentPage = clampedPage;
+                            if (_pageController.hasClients) {
+                              _pageController.jumpToPage(clampedPage);
+                            }
+                          }
+                          setState(() {});
+                        });
+                      }
                     }
+
+                    return Listener(
+                      onPointerSignal: (event) {
+                        if (event is PointerScrollEvent) {
+                          if (event.scrollDelta.dy > 50)
+                            _goNext();
+                          else if (event.scrollDelta.dy < -50)
+                            _goPrev();
+                        }
+                      },
+                      child: NotificationListener<ScrollNotification>(
+                        onNotification: (notification) {
+                          // Detect overscroll at the end of a chapter to auto‑switch to the next chapter.
+                          if (notification is OverscrollNotification &&
+                              notification.overscroll > 0 &&
+                              _selectedChapter < _chapters.length - 1 &&
+                              !_isLoadingChapter) {
+                            // Jump to the next chapter when user scrolls past the last page.
+                            _selectChapter(_selectedChapter + 1);
+                            return true;
+                          }
+                          return false;
+                        },
+                        child: _buildPageView(constraints, themeProvider),
+                      ),
+                    );
                   },
-                  child: PageView.builder(
-                    controller: _pageController,
-                    onPageChanged: _onPageChanged,
-                    itemCount: _pages.length,
-                    physics: _isLoadingChapter
-                        ? const NeverScrollableScrollPhysics()
-                        : const BouncingScrollPhysics(),
-                    itemBuilder: (context, index) {
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16.0,
-                          vertical: 8.0,
-                        ),
-                        child: SelectableText(_pages[index], style: _textStyle),
-                      );
-                    },
-                  ),
                 ),
               ),
               // 底部狀態欄
@@ -430,7 +617,7 @@ class _ReadingPageState extends State<ReadingPage> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      '章節進度: ${_currentPage + 1} / ${_pages.length}',
+                      '章節進度: ${_currentPage + 1} / ${_displayPageCount}',
                       style: TextStyle(
                         color: Colors.grey[700],
                         fontSize: 12,
@@ -449,5 +636,21 @@ class _ReadingPageState extends State<ReadingPage> {
         },
       ),
     );
+  }
+
+  /// 双栏模式下每页显示的子页数
+  int get _doubleColumnSubPages => 2;
+
+  /// 当前显示模式下的有效页数
+  int get _displayPageCount {
+    final bool useDoubleColumn =
+        _themeProvider?.doubleColumnEnabled == true &&
+        _lastLayoutWidth + 32 >=
+            (_themeProvider?.doubleColumnTriggerWidth ?? 800);
+    if (useDoubleColumn) {
+      return (_pages.length + _doubleColumnSubPages - 1) ~/
+          _doubleColumnSubPages;
+    }
+    return _pages.length;
   }
 }

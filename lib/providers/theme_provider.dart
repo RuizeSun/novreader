@@ -6,6 +6,14 @@ class ThemeProvider with ChangeNotifier {
   static const String _colorKey = 'primaryColor';
   static const String _followSystemKey = 'followSystemAccent';
   static const String _titleDisplayKey = 'showChineseTitle';
+  // 新增阅读页设置的持久化键
+  static const String _fontSizeKey = 'readingFontSize';
+  static const String _titleFontSizeKey = 'readingTitleFontSize';
+  static const String _lineHeightKey = 'readingLineHeight';
+  static const String _paragraphSpacingKey = 'readingParagraphSpacing';
+  static const String _doubleColumnEnabledKey = 'readingDoubleColumnEnabled';
+  static const String _doubleColumnTriggerKey =
+      'readingDoubleColumnTriggerWidth';
 
   bool _isDarkMode = false;
   bool get isDarkMode => _isDarkMode;
@@ -15,6 +23,13 @@ class ThemeProvider with ChangeNotifier {
   Color _primaryColor = const Color(0xFF6C63FF);
   bool _followSystemAccent = false;
   // 是否在卡片上默认显示中文标题，默认 true
+  // 阅读页默认设置
+  double _fontSize = 18.0; // 与原始 _textStyle.fontSize 相同
+  double _titleFontSize = 16.0;
+  double _lineHeight = 1.6;
+  double _paragraphSpacing = 0.0; // 通过在文本中插入空行实现
+  bool _doubleColumnEnabled = false;
+  double _doubleColumnTriggerWidth = 800.0; // 默认宽度阈值
   bool _showChineseTitle = true;
   Color get primaryColor => _primaryColor;
   bool get followSystemAccent => _followSystemAccent;
@@ -32,6 +47,14 @@ class ThemeProvider with ChangeNotifier {
     }
     _followSystemAccent = prefs.getBool(_followSystemKey) ?? false;
     _showChineseTitle = prefs.getBool(_titleDisplayKey) ?? true;
+    // 读取阅读页设置，若不存在则使用默认值
+    _fontSize = prefs.getDouble(_fontSizeKey) ?? 18.0;
+    _titleFontSize = prefs.getDouble(_titleFontSizeKey) ?? 16.0;
+    _lineHeight = prefs.getDouble(_lineHeightKey) ?? 1.6;
+    _paragraphSpacing = prefs.getDouble(_paragraphSpacingKey) ?? 0.0;
+    _doubleColumnEnabled = prefs.getBool(_doubleColumnEnabledKey) ?? false;
+    _doubleColumnTriggerWidth =
+        prefs.getDouble(_doubleColumnTriggerKey) ?? 800.0;
     notifyListeners();
   }
 
@@ -70,6 +93,56 @@ class ThemeProvider with ChangeNotifier {
     _followSystemAccent = follow;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_followSystemKey, follow);
+    notifyListeners();
+  }
+
+  // ---------- 阅读页设置相关 API ----------
+  double get readingFontSize => _fontSize;
+  double get readingTitleFontSize => _titleFontSize;
+  double get readingLineHeight => _lineHeight;
+  double get readingParagraphSpacing => _paragraphSpacing;
+  bool get doubleColumnEnabled => _doubleColumnEnabled;
+  double get doubleColumnTriggerWidth => _doubleColumnTriggerWidth;
+
+  Future<void> setReadingFontSize(double size) async {
+    _fontSize = size;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_fontSizeKey, size);
+    notifyListeners();
+  }
+
+  Future<void> setReadingTitleFontSize(double size) async {
+    _titleFontSize = size;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_titleFontSizeKey, size);
+    notifyListeners();
+  }
+
+  Future<void> setReadingLineHeight(double height) async {
+    _lineHeight = height;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_lineHeightKey, height);
+    notifyListeners();
+  }
+
+  Future<void> setReadingParagraphSpacing(double spacing) async {
+    _paragraphSpacing = spacing;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_paragraphSpacingKey, spacing);
+    notifyListeners();
+  }
+
+  Future<void> setDoubleColumnEnabled(bool enabled) async {
+    _doubleColumnEnabled = enabled;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_doubleColumnEnabledKey, enabled);
+    notifyListeners();
+  }
+
+  Future<void> setDoubleColumnTriggerWidth(double width) async {
+    _doubleColumnTriggerWidth = width;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_doubleColumnTriggerKey, width);
     notifyListeners();
   }
 

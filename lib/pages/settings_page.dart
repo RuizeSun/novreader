@@ -13,8 +13,8 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  // 分类列表，当前仅包含外观和关于两项，可自行扩展。
-  final List<String> _categories = const ['外观', '关于'];
+  // 分类列表，新增 "阅读页设置" 项目。
+  final List<String> _categories = const ['外观', '阅读页设置', '关于'];
   int _selectedIndex = 0;
 
   @override
@@ -69,6 +69,9 @@ class _SettingsPageState extends State<SettingsPage> {
                     case '外观':
                       child = _buildAppearance(context, themeProvider);
                       break;
+                    case '阅读页设置':
+                      child = _buildReadingSettings(context, themeProvider);
+                      break;
                     case '关于':
                       child = _buildAbout(context);
                       break;
@@ -98,6 +101,8 @@ class _SettingsPageState extends State<SettingsPage> {
     switch (_categories[_selectedIndex]) {
       case '外观':
         return _buildAppearance(context, themeProvider);
+      case '阅读页设置':
+        return _buildReadingSettings(context, themeProvider);
       case '关于':
         return _buildAbout(context);
       default:
@@ -236,6 +241,87 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ),
           const SizedBox(height: 12),
+        ],
+      ),
+    );
+  }
+
+  /// 阅读页设置：字体大小、章节标题大小、行距、段距、双栏及触发阈值。
+  Widget _buildReadingSettings(
+    BuildContext context,
+    ThemeProvider themeProvider,
+  ) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 字体大小
+          ListTile(
+            title: const Text('字体大小'),
+            subtitle: Slider.adaptive(
+              min: 12,
+              max: 30,
+              divisions: 18,
+              value: themeProvider.readingFontSize,
+              label: '${themeProvider.readingFontSize.toStringAsFixed(0)}',
+              onChanged: (v) => themeProvider.setReadingFontSize(v),
+            ),
+          ),
+          // 章节标题大小
+          ListTile(
+            title: const Text('章节标题大小'),
+            subtitle: Slider.adaptive(
+              min: 12,
+              max: 30,
+              divisions: 18,
+              value: themeProvider.readingTitleFontSize,
+              label: '${themeProvider.readingTitleFontSize.toStringAsFixed(0)}',
+              onChanged: (v) => themeProvider.setReadingTitleFontSize(v),
+            ),
+          ),
+          // 行距
+          ListTile(
+            title: const Text('行距'),
+            subtitle: Slider.adaptive(
+              min: 1.0,
+              max: 2.5,
+              divisions: 15,
+              value: themeProvider.readingLineHeight,
+              label: themeProvider.readingLineHeight.toStringAsFixed(2),
+              onChanged: (v) => themeProvider.setReadingLineHeight(v),
+            ),
+          ),
+          // 段距（通过额外空行实现）
+          ListTile(
+            title: const Text('段距（空行数）'),
+            subtitle: Slider.adaptive(
+              min: 0,
+              max: 5,
+              divisions: 5,
+              value: themeProvider.readingParagraphSpacing,
+              label: '${themeProvider.readingParagraphSpacing.toInt()}',
+              onChanged: (v) => themeProvider.setReadingParagraphSpacing(v),
+            ),
+          ),
+          // 双栏开关
+          SwitchListTile(
+            title: const Text('双栏布局'),
+            value: themeProvider.doubleColumnEnabled,
+            onChanged: (v) => themeProvider.setDoubleColumnEnabled(v),
+          ),
+          // 双栏触发宽度
+          ListTile(
+            title: const Text('双栏触发宽度 (px)'),
+            subtitle: Slider.adaptive(
+              min: 600,
+              max: 1200,
+              divisions: 12,
+              value: themeProvider.doubleColumnTriggerWidth,
+              label: '${themeProvider.doubleColumnTriggerWidth.toInt()}',
+              onChanged: (v) => themeProvider.setDoubleColumnTriggerWidth(v),
+            ),
+          ),
         ],
       ),
     );
