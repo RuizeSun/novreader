@@ -162,8 +162,9 @@ class _ReadingPageState extends State<ReadingPage> {
     final List<String> result = [];
     final textPainter = TextPainter(
       textDirection: TextDirection.ltr,
-      // 估算最大行數以優化效能
-      maxLines: (height / (_textStyle.fontSize! * _textStyle.height!)).floor(),
+      // 估算最大行數以優化效能（减去 4px 垂直安全余量）
+      maxLines: ((height - 4) / (_textStyle.fontSize! * _textStyle.height!))
+          .floor(),
     );
 
     int start = 0;
@@ -179,9 +180,27 @@ class _ReadingPageState extends State<ReadingPage> {
       textPainter.layout(maxWidth: width - 2);
 
       final TextPosition pos = textPainter.getPositionForOffset(
-        Offset(width - 2, height),
+        Offset(width - 2, height - 4),
       );
       int count = pos.offset;
+
+      // 检查最后一行是否完整显示，若不完整则留到下一页
+      if (count > 0 && start + count < text.length) {
+        final Offset caretOffset = textPainter.getOffsetForCaret(
+          pos,
+          Rect.zero,
+        );
+        final double lineHeight = _textStyle.fontSize! * _textStyle.height!;
+        if (caretOffset.dy + lineHeight > height - 4) {
+          // 最后一行不完整，回退到该行起始位置
+          final TextPosition lineStart = textPainter.getPositionForOffset(
+            Offset(0, caretOffset.dy),
+          );
+          if (lineStart.offset > 0) {
+            count = lineStart.offset;
+          }
+        }
+      }
 
       if (count <= 0) count = 1;
 
@@ -307,6 +326,17 @@ class _ReadingPageState extends State<ReadingPage> {
         provider.doubleColumnEnabled &&
         constraints.maxWidth >= provider.doubleColumnTriggerWidth;
 
+    // 计算最大行数，防止 SelectableText 渲染溢出
+    final double textHeight =
+        constraints.maxHeight -
+        16.0 -
+        (_currentChapterTitle.isNotEmpty
+            ? (provider.readingTitleFontSize + 12.0)
+            : 0);
+    final int maxLines =
+        ((textHeight - 4) / (_textStyle.fontSize! * _textStyle.height!))
+            .floor();
+
     if (useDoubleColumn) {
       // 双栏实现：每页显示两个连续的分页项，左右各一栏
       final int pageCount = (_pages.length + 1) ~/ 2;
@@ -357,14 +387,22 @@ class _ReadingPageState extends State<ReadingPage> {
                       Expanded(
                         child: Align(
                           alignment: Alignment.topLeft,
-                          child: SelectableText(leftText, style: _textStyle),
+                          child: SelectableText(
+                            leftText,
+                            style: _textStyle,
+                            maxLines: maxLines,
+                          ),
                         ),
                       ),
                       const SizedBox(width: 16),
                       Expanded(
                         child: Align(
                           alignment: Alignment.topLeft,
-                          child: SelectableText(rightText, style: _textStyle),
+                          child: SelectableText(
+                            rightText,
+                            style: _textStyle,
+                            maxLines: maxLines,
+                          ),
                         ),
                       ),
                     ],
@@ -407,7 +445,13 @@ class _ReadingPageState extends State<ReadingPage> {
                     ),
                   ),
                 ),
-              Expanded(child: SelectableText(_pages[index], style: _textStyle)),
+              Expanded(
+                child: SelectableText(
+                  _pages[index],
+                  style: _textStyle,
+                  maxLines: maxLines,
+                ),
+              ),
             ],
           ),
         );
