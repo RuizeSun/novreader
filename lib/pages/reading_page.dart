@@ -152,58 +152,80 @@ class _ReadingPageState extends State<ReadingPage> {
     });
   }
 
+  /// 二分查找：在 [targetLines] 行内容纳的最多字符数
+  /// 适用于每页固定行数的场景，比 getPositionForOffset 更精确。
+  int _binarySearchLineBreak(
+    String text,
+    double width, {
+    required int targetLines,
+  }) {
+    int low = 0;
+    int high = text.length;
+
+    while (low < high) {
+      final int mid = (low + high + 1) ~/ 2;
+      final tp = TextPainter(
+        textDirection: TextDirection.ltr,
+        text: TextSpan(text: text.substring(0, mid), style: _textStyle),
+      );
+      tp.layout(maxWidth: width);
+      if (tp.computeLineMetrics().length <= targetLines) {
+        low = mid;
+      } else {
+        high = mid - 1;
+      }
+    }
+    return low;
+  }
+
   /// 核心分頁算法
+  /// 使用 computeLineMetrics() + 二分查找替代旧的 getPositionForOffset 方案，
+  /// 避免 TextPainter 与 SelectableText 渲染差异和行尾截断问题。
   void _performPagination(String text, double width, double height) {
     if (text.isEmpty) {
       _pages = ['無內容'];
       return;
     }
 
+    final double lineHeight = _textStyle.fontSize! * _textStyle.height!;
+    final int maxLines = ((height - 8) / lineHeight).floor();
+    if (maxLines <= 0) {
+      _pages = [text];
+      return;
+    }
+
     final List<String> result = [];
-    final textPainter = TextPainter(
-      textDirection: TextDirection.ltr,
-      // 估算最大行數以優化效能（减去 4px 垂直安全余量）
-      maxLines: ((height - 4) / (_textStyle.fontSize! * _textStyle.height!))
-          .floor(),
-    );
 
     int start = 0;
     while (start < text.length) {
-      int end = start + 2000; // 預取一段長度
+      int end = start + 2000;
       if (end > text.length) end = text.length;
 
+      // 不设 maxLines，让 TextPainter 完整布局文字，再用 computeLineMetrics 判断
+      final textPainter = TextPainter(textDirection: TextDirection.ltr);
       textPainter.text = TextSpan(
         text: text.substring(start, end),
         style: _textStyle,
       );
-      // 减去 2px 余量，防止 TextPainter 与 SelectableText 渲染精度差异导致的水平溢出
-      textPainter.layout(maxWidth: width - 2);
+      // 与 SelectableText 使用完全一致的宽度，消除渲染偏差
+      textPainter.layout(maxWidth: width);
 
-      final TextPosition pos = textPainter.getPositionForOffset(
-        Offset(width - 2, height - 4),
-      );
-      int count = pos.offset;
+      final lineMetrics = textPainter.computeLineMetrics();
 
-      // 检查最后一行是否完整显示，若不完整则留到下一页
-      if (count > 0 && start + count < text.length) {
-        final Offset caretOffset = textPainter.getOffsetForCaret(
-          pos,
-          Rect.zero,
+      int count;
+      if (lineMetrics.length <= maxLines) {
+        // 全部文本刚好能在一页内显示
+        count = text.substring(start, end).length;
+      } else {
+        // 二分查找精确的行断点
+        count = _binarySearchLineBreak(
+          text.substring(start, end),
+          width,
+          targetLines: maxLines,
         );
-        final double lineHeight = _textStyle.fontSize! * _textStyle.height!;
-        if (caretOffset.dy + lineHeight > height - 4) {
-          // 最后一行不完整，回退到该行起始位置
-          final TextPosition lineStart = textPainter.getPositionForOffset(
-            Offset(0, caretOffset.dy),
-          );
-          if (lineStart.offset > 0) {
-            count = lineStart.offset;
-          }
-        }
       }
 
       if (count <= 0) count = 1;
-
       result.add(text.substring(start, start + count));
       start += count;
     }
@@ -327,6 +349,7 @@ class _ReadingPageState extends State<ReadingPage> {
         constraints.maxWidth >= provider.doubleColumnTriggerWidth;
 
     // 计算最大行数，防止 SelectableText 渲染溢出
+    // 使用与 _performPagination 一致的 8px 安全余量
     final double textHeight =
         constraints.maxHeight -
         16.0 -
@@ -334,7 +357,7 @@ class _ReadingPageState extends State<ReadingPage> {
             ? (provider.readingTitleFontSize + 12.0)
             : 0);
     final int maxLines =
-        ((textHeight - 4) / (_textStyle.fontSize! * _textStyle.height!))
+        ((textHeight - 8) / (_textStyle.fontSize! * _textStyle.height!))
             .floor();
 
     if (useDoubleColumn) {
