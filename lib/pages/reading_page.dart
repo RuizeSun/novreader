@@ -501,6 +501,11 @@ class _ReadingPageState extends State<ReadingPage> {
         ),
         actions: [
           IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () => _showReadingSettings(context),
+            tooltip: '阅读设置',
+          ),
+          IconButton(
             icon: const Icon(Icons.menu),
             onPressed: () => _scaffoldKey.currentState?.openDrawer(),
             tooltip: '目录',
@@ -702,6 +707,137 @@ class _ReadingPageState extends State<ReadingPage> {
           );
         },
       ),
+    );
+  }
+
+  /// 显示阅读设置 BottomSheet
+  void _showReadingSettings(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        return Consumer<ThemeProvider>(
+          builder: (context, themeProvider, child) {
+            return DraggableScrollableSheet(
+              initialChildSize: 0.6,
+              minChildSize: 0.3,
+              maxChildSize: 0.85,
+              expand: false,
+              builder: (context, scrollController) {
+                return SingleChildScrollView(
+                  controller: scrollController,
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // 拖拽指示条
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 4,
+                          margin: const EdgeInsets.only(bottom: 16),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[300],
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ),
+                      const Text(
+                        '阅读设置',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      // 字体大小
+                      ListTile(
+                        title: const Text('字体大小'),
+                        subtitle: Slider.adaptive(
+                          min: 12,
+                          max: 30,
+                          divisions: 18,
+                          value: themeProvider.readingFontSize,
+                          label:
+                              '${themeProvider.readingFontSize.toStringAsFixed(0)}',
+                          onChanged: (v) => themeProvider.setReadingFontSize(v),
+                        ),
+                      ),
+                      // 章节标题大小
+                      ListTile(
+                        title: const Text('章节标题大小'),
+                        subtitle: Slider.adaptive(
+                          min: 12,
+                          max: 30,
+                          divisions: 18,
+                          value: themeProvider.readingTitleFontSize,
+                          label:
+                              '${themeProvider.readingTitleFontSize.toStringAsFixed(0)}',
+                          onChanged: (v) =>
+                              themeProvider.setReadingTitleFontSize(v),
+                        ),
+                      ),
+                      // 行距
+                      ListTile(
+                        title: const Text('行距'),
+                        subtitle: Slider.adaptive(
+                          min: 1.0,
+                          max: 2.5,
+                          divisions: 15,
+                          value: themeProvider.readingLineHeight,
+                          label: themeProvider.readingLineHeight
+                              .toStringAsFixed(2),
+                          onChanged: (v) =>
+                              themeProvider.setReadingLineHeight(v),
+                        ),
+                      ),
+                      // 段距
+                      ListTile(
+                        title: const Text('段距（空行数）'),
+                        subtitle: Slider.adaptive(
+                          min: 0,
+                          max: 5,
+                          divisions: 5,
+                          value: themeProvider.readingParagraphSpacing,
+                          label:
+                              '${themeProvider.readingParagraphSpacing.toInt()}',
+                          onChanged: (v) =>
+                              themeProvider.setReadingParagraphSpacing(v),
+                        ),
+                      ),
+                      const Divider(),
+                      // 双栏开关
+                      SwitchListTile(
+                        title: const Text('双栏布局'),
+                        value: themeProvider.doubleColumnEnabled,
+                        onChanged: (v) =>
+                            themeProvider.setDoubleColumnEnabled(v),
+                      ),
+                      // 双栏触发宽度
+                      ListTile(
+                        title: const Text('双栏触发宽度 (px)'),
+                        subtitle: Slider.adaptive(
+                          min: 600,
+                          max: 1200,
+                          divisions: 12,
+                          value: themeProvider.doubleColumnTriggerWidth,
+                          label:
+                              '${themeProvider.doubleColumnTriggerWidth.toInt()}',
+                          onChanged: (v) =>
+                              themeProvider.setDoubleColumnTriggerWidth(v),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
     );
   }
 
