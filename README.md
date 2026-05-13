@@ -19,4 +19,5 @@ This is my first Flutter project developed with LLM assistance; while the code s
 > a.b.c-d.e+f → a > b > c > d > e (f)  
 > **d:** Beta > Alpha > Snapshot
 
-`1.0.0-snapshot.1` is `1.0.0`'s first snapshot version. `1.0.0-alpha.1` is `1.0.0`'s first alpha version, there're 5 snapshot versions before alpha.1's release, so the next snapshot version after alpha.1 is `1.0.0-snapshot.6+7` _(67)_.
+Example: `1.0.0-snapshot.1` → `1.0.0-snapshot.2` → `1.0.0-alpha.1` → `1.0.0-alpha.2` → `1.0.0-beta.1` → `1.0.0-beta.2` → `1.0.0`  
+`1.0.0` → `1.0.1` → `1.0.2` → `1.1.0` → `1.2.0` → `2.0.0`
