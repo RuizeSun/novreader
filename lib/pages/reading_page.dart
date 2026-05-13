@@ -53,6 +53,9 @@ class _ReadingPageState extends State<ReadingPage> {
   // 用於檢測佈局尺寸變化
   double _lastLayoutWidth = 0;
   double _lastLayoutHeight = 0;
+  // 用於檢測文字樣式變化（字體大小、行距）
+  double _cachedFontSize = 0;
+  double _cachedLineHeight = 0;
 
   @override
   void initState() {
@@ -603,9 +606,11 @@ class _ReadingPageState extends State<ReadingPage> {
                     final double availableWidth = constraints.maxWidth - 32;
                     final double availableHeight = constraints.maxHeight;
 
-                    // 檢測尺寸變化，重新分頁以適應新窗口大小
+                    // 檢測尺寸或文字樣式變化，重新分頁
                     if (availableWidth != _lastLayoutWidth ||
-                        availableHeight != _lastLayoutHeight) {
+                        availableHeight != _lastLayoutHeight ||
+                        _textStyle.fontSize != _cachedFontSize ||
+                        _textStyle.height != _cachedLineHeight) {
                       _lastLayoutWidth = availableWidth;
                       _lastLayoutHeight = availableHeight;
                       if (_chapters.isNotEmpty) {
@@ -625,6 +630,9 @@ class _ReadingPageState extends State<ReadingPage> {
                         final double paginateWidth = useDoubleColumn
                             ? (availableWidth - 16) / 2
                             : availableWidth;
+                        // 更新緩存的文字樣式參數
+                        _cachedFontSize = _textStyle.fontSize!;
+                        _cachedLineHeight = _textStyle.height!;
                         _performPagination(
                           _currentChapterBody,
                           paginateWidth,
