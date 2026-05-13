@@ -351,8 +351,8 @@ class _ReadingPageState extends State<ReadingPage> {
         provider.doubleColumnEnabled &&
         constraints.maxWidth >= provider.doubleColumnTriggerWidth;
 
-    // 计算最大行数，防止 SelectableText 渲染溢出
-    // 使用与 _performPagination 一致的 8px 安全余量
+    // 计算 SelectableText 的最大行数，与 _performPagination 分页逻辑保持一致
+    // 防止因 TextPainter 与 SelectableText 行高计算差异导致文本溢出
     final double textHeight =
         constraints.maxHeight -
         16.0 -
