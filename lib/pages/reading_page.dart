@@ -50,12 +50,23 @@ class _ReadingPageState extends State<ReadingPage> {
     fontFamily: 'Roboto',
   );
 
+  // 分页安全边距：补偿 TextPainter 浮点行高与 Flutter 引擎子像素对齐之间的累积误差。
+  // 行距越小（如 1.2），误差越明显，保留约 1 行高的余量可完全消除溢出。
+  static const double _kPageHeightSafetyMargin = 4.0;
+
+  // 标题真实渲染高度（通过 GlobalKey postFrame 测量，比 TextPainter 估算更准确）。
+  // 初始值用 -1 标记"尚未测量"，首次渲染首页标题后触发重新分页。
+  final GlobalKey _titleKey = GlobalKey();
+  double _measuredTitleHeight = -1;
+
   // 用於檢測佈局尺寸變化
   double _lastLayoutWidth = 0;
   double _lastLayoutHeight = 0;
   // 用於檢測文字樣式變化（字體大小、行距）
   double _cachedFontSize = 0;
   double _cachedLineHeight = 0;
+  // 用于检测标题字体大小变化，触发重新测量
+  double _cachedTitleFontSize = 0;
 
   @override
   void initState() {
@@ -181,6 +192,49 @@ class _ReadingPageState extends State<ReadingPage> {
     return low;
   }
 
+  /// 统一的分页入口：优先使用 postFrame 真实测量的标题高度，
+  /// 降级时用 TextPainter 估算，两者都比直接用 fontSize 更准确。
+  void _paginateWithTitle({
+    required double availableWidth,
+    required double availableHeight,
+    bool useDoubleColumn = false,
+  }) {
+    double titleHeight = 0.0;
+    if (_currentChapterTitle.isNotEmpty) {
+      if (_measuredTitleHeight > 0) {
+        // 优先：使用 postFrame 读取的真实渲染高度（最准确）
+        titleHeight = _measuredTitleHeight;
+      } else {
+        // 降级：用 TextPainter 估算（首次渲染前使用）
+        final tp = TextPainter(
+          textDirection: TextDirection.ltr,
+          text: TextSpan(
+            text: _currentChapterTitle,
+            style: TextStyle(
+              fontSize: _themeProvider?.readingTitleFontSize ?? 20,
+              fontWeight: FontWeight.bold,
+              fontFamily: 'Roboto',
+            ),
+          ),
+        )..layout(maxWidth: availableWidth);
+        titleHeight = tp.height + 12.0;
+      }
+    }
+
+    // 与渲染侧完全对称的高度扣减：
+    //   16 = vertical padding (8 top + 8 bottom)
+    //   8  = _performPagination 内部 (height - 8) 的那个 8
+    //   _kPageHeightSafetyMargin = 浮点行高累积误差补偿
+    final double adjustedHeight =
+        availableHeight - 16.0 - 8.0 - titleHeight - _kPageHeightSafetyMargin;
+
+    final double paginateWidth = useDoubleColumn
+        ? (availableWidth - 16) / 2
+        : availableWidth;
+
+    _performPagination(_currentChapterBody, paginateWidth, adjustedHeight);
+  }
+
   /// 核心分頁算法
   /// 使用 computeLineMetrics() + 二分查找替代旧的 getPositionForOffset 方案，
   /// 避免 TextPainter 与 SelectableText 渲染差异和行尾截断问题。
@@ -191,7 +245,8 @@ class _ReadingPageState extends State<ReadingPage> {
     }
 
     final double lineHeight = _textStyle.fontSize! * _textStyle.height!;
-    final int maxLines = ((height - 8) / lineHeight).floor();
+    final int maxLines = ((height - 8 - _kPageHeightSafetyMargin) / lineHeight)
+        .floor();
     if (maxLines <= 0) {
       _pages = [text];
       return;
@@ -260,19 +315,26 @@ class _ReadingPageState extends State<ReadingPage> {
 
     // 提取标题和正文
     _extractChapterTitleAndBody(index);
+    // 切换章节时重置标题测量值，等待新章节首页渲染后重新测量
+    _measuredTitleHeight = -1;
 
     // 使用 LayoutBuilder 已捕獲的佈局尺寸，確保與窗口自適應邏輯一致
-    _performPagination(
-      _currentChapterBody,
-      _lastLayoutWidth > 0
-          ? _lastLayoutWidth
-          : (MediaQuery.of(context).size.width - 32),
-      _lastLayoutHeight > 0
-          ? _lastLayoutHeight
-          : (MediaQuery.of(context).size.height -
-                kToolbarHeight -
-                MediaQuery.of(context).padding.top -
-                60),
+    final double w = _lastLayoutWidth > 0
+        ? _lastLayoutWidth
+        : (MediaQuery.of(context).size.width - 32);
+    final double h = _lastLayoutHeight > 0
+        ? _lastLayoutHeight
+        : (MediaQuery.of(context).size.height -
+              kToolbarHeight -
+              MediaQuery.of(context).padding.top -
+              60);
+    final bool useDoubleColumn =
+        (_themeProvider?.doubleColumnEnabled ?? false) &&
+        (w + 32) >= (_themeProvider?.doubleColumnTriggerWidth ?? 800);
+    _paginateWithTitle(
+      availableWidth: w,
+      availableHeight: h,
+      useDoubleColumn: useDoubleColumn,
     );
 
     final targetPage = jumpToLast ? (_pages.length - 1) : 0;
@@ -346,25 +408,41 @@ class _ReadingPageState extends State<ReadingPage> {
 
   // Build the page view, supporting optional double‑column layout based on ThemeProvider settings.
   Widget _buildPageView(BoxConstraints constraints, ThemeProvider provider) {
-    // 判斷是否啟用雙欄以及螢幕寬度是否達到觸發阈值。
     final bool useDoubleColumn =
         provider.doubleColumnEnabled &&
         constraints.maxWidth >= provider.doubleColumnTriggerWidth;
 
-    // 计算 SelectableText 的最大行数，与 _performPagination 分页逻辑保持一致
-    // 防止因 TextPainter 与 SelectableText 行高计算差异导致文本溢出
-    final double textHeight =
-        constraints.maxHeight -
-        16.0 -
-        (_currentChapterTitle.isNotEmpty
-            ? (provider.readingTitleFontSize + 12.0)
-            : 0);
-    final int maxLines =
-        ((textHeight - 8) / (_textStyle.fontSize! * _textStyle.height!))
-            .floor();
+    // ── 章节标题 Widget ────────────────────────────────────────────────────
+    // 挂 GlobalKey 以便 postFrame 读取真实渲染高度（含 strut/字体度量），
+    // 比 TextPainter 估算更准确，用于下一次分页。
+    Widget _buildTitle() => Padding(
+      key: _titleKey,
+      padding: const EdgeInsets.only(bottom: 12.0),
+      child: Text(
+        _currentChapterTitle,
+        style: TextStyle(
+          fontSize: provider.readingTitleFontSize,
+          fontWeight: FontWeight.bold,
+          color: Colors.black87,
+          fontFamily: 'Roboto',
+        ),
+      ),
+    );
+
+    // ── 正文 Widget ────────────────────────────────────────────────────────
+    // 核心修复：不再用 maxLines 限制行数（那依赖对标题高度的预测，始终有误差）。
+    // 改为：
+    //   1. 用 Expanded 让正文区占满 Column 剩余空间（标题自然占位，不用计算）
+    //   2. 用 ClipRect 裁剪，彻底防止内容溢出触发 RenderFlex overflow 异常
+    //   3. 分页算法侧用 _measuredTitleHeight（postFrame 真实测量值）而非估算值
+    Widget _buildTextBlock(String text) => ClipRect(
+      child: Align(
+        alignment: Alignment.topLeft,
+        child: Text(text, style: _textStyle, overflow: TextOverflow.clip),
+      ),
+    );
 
     if (useDoubleColumn) {
-      // 双栏实现：每页显示两个连续的分页项，左右各一栏
       final int pageCount = (_pages.length + 1) ~/ 2;
       return PageView.builder(
         controller: _pageController,
@@ -382,9 +460,8 @@ class _ReadingPageState extends State<ReadingPage> {
           final String rightText = rightIndex < _pages.length
               ? _pages[rightIndex]
               : '';
-          // 仅在每章首页显示章节标题
           final bool isFirstPage = index == 0;
-          final String chapterTitle = isFirstPage ? _currentChapterTitle : '';
+
           return Padding(
             padding: const EdgeInsets.symmetric(
               horizontal: 16.0,
@@ -392,45 +469,17 @@ class _ReadingPageState extends State<ReadingPage> {
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.max,
               children: [
-                if (chapterTitle.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 12.0),
-                    child: Text(
-                      chapterTitle,
-                      style: TextStyle(
-                        fontSize: provider.readingTitleFontSize,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                        fontFamily: 'Roboto',
-                      ),
-                    ),
-                  ),
+                if (isFirstPage && _currentChapterTitle.isNotEmpty)
+                  _buildTitle(),
                 Expanded(
                   child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: Align(
-                          alignment: Alignment.topLeft,
-                          child: SelectableText(
-                            leftText,
-                            style: _textStyle,
-                            maxLines: maxLines,
-                          ),
-                        ),
-                      ),
+                      Expanded(child: _buildTextBlock(leftText)),
                       const SizedBox(width: 16),
-                      Expanded(
-                        child: Align(
-                          alignment: Alignment.topLeft,
-                          child: SelectableText(
-                            rightText,
-                            style: _textStyle,
-                            maxLines: maxLines,
-                          ),
-                        ),
-                      ),
+                      Expanded(child: _buildTextBlock(rightText)),
                     ],
                   ),
                 ),
@@ -450,34 +499,15 @@ class _ReadingPageState extends State<ReadingPage> {
           ? const NeverScrollableScrollPhysics()
           : const BouncingScrollPhysics(),
       itemBuilder: (context, index) {
-        // 仅在每章首页显示章节标题
         final bool isFirstPage = index == 0;
-        final String chapterTitle = isFirstPage ? _currentChapterTitle : '';
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.max,
             children: [
-              if (chapterTitle.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12.0),
-                  child: Text(
-                    chapterTitle,
-                    style: TextStyle(
-                      fontSize: provider.readingTitleFontSize,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                      fontFamily: 'Roboto',
-                    ),
-                  ),
-                ),
-              Expanded(
-                child: SelectableText(
-                  _pages[index],
-                  style: _textStyle,
-                  maxLines: maxLines,
-                ),
-              ),
+              if (isFirstPage && _currentChapterTitle.isNotEmpty) _buildTitle(),
+              Expanded(child: _buildTextBlock(_pages[index])),
             ],
           ),
         );
@@ -607,40 +637,54 @@ class _ReadingPageState extends State<ReadingPage> {
                     final double availableHeight = constraints.maxHeight;
 
                     // 檢測尺寸或文字樣式變化，重新分頁
+                    final double curTitleFontSize =
+                        themeProvider.readingTitleFontSize;
                     if (availableWidth != _lastLayoutWidth ||
                         availableHeight != _lastLayoutHeight ||
                         _textStyle.fontSize != _cachedFontSize ||
-                        _textStyle.height != _cachedLineHeight) {
+                        _textStyle.height != _cachedLineHeight ||
+                        curTitleFontSize != _cachedTitleFontSize) {
                       _lastLayoutWidth = availableWidth;
                       _lastLayoutHeight = availableHeight;
+                      // 标题字体变化时，重置测量值，等待 postFrame 重新测量
+                      if (curTitleFontSize != _cachedTitleFontSize) {
+                        _measuredTitleHeight = -1;
+                        _cachedTitleFontSize = curTitleFontSize;
+                      }
                       if (_chapters.isNotEmpty) {
                         final bool useDoubleColumn =
                             themeProvider.doubleColumnEnabled &&
                             constraints.maxWidth >=
                                 themeProvider.doubleColumnTriggerWidth;
-                        // 统一减去垂直 padding（16px）和标题高度
-                        double adjustedHeight = availableHeight;
-                        adjustedHeight -=
-                            16.0; // Column 垂直 padding（8px top + 8px bottom）
-                        if (_currentChapterTitle.isNotEmpty) {
-                          adjustedHeight -=
-                              (themeProvider.readingTitleFontSize + 12.0);
-                        }
-                        // 双栏模式下用列宽重新分页，每页文字正好填满一栏高度
-                        final double paginateWidth = useDoubleColumn
-                            ? (availableWidth - 16) / 2
-                            : availableWidth;
                         // 更新緩存的文字樣式參數
                         _cachedFontSize = _textStyle.fontSize!;
                         _cachedLineHeight = _textStyle.height!;
-                        _performPagination(
-                          _currentChapterBody,
-                          paginateWidth,
-                          adjustedHeight,
+                        // 统一调用 _paginateWithTitle，内部使用 _measuredTitleHeight
+                        _paginateWithTitle(
+                          availableWidth: availableWidth,
+                          availableHeight: availableHeight,
+                          useDoubleColumn: useDoubleColumn,
                         );
-                        // 在下一幀更新 UI 並修正當前頁碼
+                        // postFrame：读取标题真实高度，若与本次分页用的值不同则重新分页
                         WidgetsBinding.instance.addPostFrameCallback((_) {
                           if (!mounted) return;
+                          // 读取标题真实渲染高度
+                          final titleBox =
+                              _titleKey.currentContext?.findRenderObject()
+                                  as RenderBox?;
+                          if (titleBox != null) {
+                            final realHeight = titleBox.size.height;
+                            if ((realHeight - _measuredTitleHeight).abs() >
+                                0.5) {
+                              _measuredTitleHeight = realHeight;
+                              // 用真实高度重新分页
+                              _paginateWithTitle(
+                                availableWidth: availableWidth,
+                                availableHeight: availableHeight,
+                                useDoubleColumn: useDoubleColumn,
+                              );
+                            }
+                          }
                           final int maxPage = useDoubleColumn
                               ? ((_pages.length + 1) ~/ 2) - 1
                               : _pages.length - 1;
