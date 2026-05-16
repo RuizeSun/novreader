@@ -9,6 +9,7 @@ import 'package:novriidaa_reader/providers/theme_provider.dart';
 import '../models/book.dart';
 import '../utils/chapter_parser.dart';
 import '../services/book_repository.dart';
+import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 
 /// 閱讀頁面：支持動態精確分頁、章節跳轉（目錄）與進度保存。
 class ReadingPage extends StatefulWidget {
@@ -46,7 +47,7 @@ class _ReadingPageState extends State<ReadingPage> {
   TextStyle get _textStyle => TextStyle(
     fontSize: _themeProvider?.readingFontSize ?? 18,
     height: _themeProvider?.readingLineHeight ?? 1.6,
-    color: Colors.black87,
+    color: _themeProvider?.readingFontColor ?? Colors.black87,
     fontFamily: 'Roboto',
   );
 
@@ -520,14 +521,22 @@ class _ReadingPageState extends State<ReadingPage> {
     final themeProvider = Provider.of<ThemeProvider>(context);
     // 保存 provider 以供 _textStyle getter 使用
     _themeProvider = themeProvider;
+    // 根据背景亮度动态决定前景色（文字、图标）
+    final bool isBgDark =
+        ThemeData.estimateBrightnessForColor(
+          themeProvider.readingBackgroundColor,
+        ) ==
+        Brightness.dark;
+    final Color appBarForeground = isBgDark ? Colors.white : Colors.black87;
     return Scaffold(
       key: _scaffoldKey,
-      backgroundColor: const Color(0xFFF5F5D1),
+      // 使用可配置的阅读背景颜色，默认保持原有颜色
+      backgroundColor: themeProvider.readingBackgroundColor,
       appBar: AppBar(
         title: Text(widget.book.title, style: const TextStyle(fontSize: 16)),
         elevation: 0,
         backgroundColor: Colors.transparent,
-        foregroundColor: Colors.black87,
+        foregroundColor: appBarForeground,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.of(context).pop(),
@@ -806,6 +815,7 @@ class _ReadingPageState extends State<ReadingPage> {
                       ),
                       const SizedBox(height: 16),
                       // 字体大小
+                      // 字体大小
                       ListTile(
                         title: const Text('字体大小'),
                         subtitle: Slider.adaptive(
@@ -816,6 +826,112 @@ class _ReadingPageState extends State<ReadingPage> {
                           label:
                               '${themeProvider.readingFontSize.toStringAsFixed(0)}',
                           onChanged: (v) => themeProvider.setReadingFontSize(v),
+                        ),
+                      ),
+                      // 背景颜色设置（预设 + 自定义）
+                      ListTile(
+                        title: const Text('背景颜色'),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // 预设颜色块
+                            Wrap(
+                              spacing: 8,
+                              children:
+                                  [
+                                        Colors.white,
+                                        const Color(0xFFF5F5D1),
+                                        const Color(0xFFE0E0E0),
+                                        const Color(0xFFB0B0B0),
+                                        Colors.black,
+                                      ]
+                                      .map(
+                                        (c) => GestureDetector(
+                                          onTap: () => themeProvider
+                                              .setReadingBackgroundColor(c),
+                                          child: Container(
+                                            width: 24,
+                                            height: 24,
+                                            decoration: BoxDecoration(
+                                              color: c,
+                                              border: Border.all(
+                                                color:
+                                                    themeProvider
+                                                            .readingBackgroundColor ==
+                                                        c
+                                                    ? Colors.blueAccent
+                                                    : Colors.transparent,
+                                                width: 2,
+                                              ),
+                                              borderRadius:
+                                                  BorderRadius.circular(4),
+                                            ),
+                                          ),
+                                        ),
+                                      )
+                                      .toList(),
+                            ),
+                            const SizedBox(height: 8),
+                            // 自定义颜色按钮
+                            ElevatedButton(
+                              onPressed: () => _showBackgroundColorPicker(
+                                context,
+                                themeProvider,
+                              ),
+                              child: const Text('自定义颜色'),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // 字体颜色设置（预设 + 自定义）
+                      ListTile(
+                        title: const Text('字体颜色'),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Wrap(
+                              spacing: 8,
+                              children:
+                                  [
+                                        Colors.black,
+                                        Colors.white,
+                                        Colors.red,
+                                        Colors.green,
+                                        Colors.blue,
+                                      ]
+                                      .map(
+                                        (c) => GestureDetector(
+                                          onTap: () => themeProvider
+                                              .setReadingFontColor(c),
+                                          child: Container(
+                                            width: 24,
+                                            height: 24,
+                                            decoration: BoxDecoration(
+                                              color: c,
+                                              border: Border.all(
+                                                color:
+                                                    themeProvider
+                                                            .readingFontColor ==
+                                                        c
+                                                    ? Colors.blueAccent
+                                                    : Colors.transparent,
+                                                width: 2,
+                                              ),
+                                              borderRadius:
+                                                  BorderRadius.circular(4),
+                                            ),
+                                          ),
+                                        ),
+                                      )
+                                      .toList(),
+                            ),
+                            const SizedBox(height: 8),
+                            ElevatedButton(
+                              onPressed: () =>
+                                  _showFontColorPicker(context, themeProvider),
+                              child: const Text('自定义颜色'),
+                            ),
+                          ],
                         ),
                       ),
                       // 章节标题大小
@@ -888,6 +1004,73 @@ class _ReadingPageState extends State<ReadingPage> {
               },
             );
           },
+        );
+      },
+    );
+  }
+
+  // 显示自定义背景颜色选择器
+  void _showBackgroundColorPicker(
+    BuildContext context,
+    ThemeProvider themeProvider,
+  ) {
+    Color pickerColor = themeProvider.readingBackgroundColor;
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('选择背景颜色'),
+          content: SingleChildScrollView(
+            child: BlockPicker(
+              pickerColor: pickerColor,
+              onColorChanged: (color) => pickerColor = color,
+            ),
+          ),
+          actions: [
+            TextButton(
+              child: const Text('取消'),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            TextButton(
+              child: const Text('确定'),
+              onPressed: () {
+                themeProvider.setReadingBackgroundColor(pickerColor);
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // 显示自定义字体颜色选择器
+  void _showFontColorPicker(BuildContext context, ThemeProvider themeProvider) {
+    Color pickerColor = themeProvider.readingFontColor;
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('选择字体颜色'),
+          content: SingleChildScrollView(
+            child: BlockPicker(
+              pickerColor: pickerColor,
+              onColorChanged: (color) => pickerColor = color,
+            ),
+          ),
+          actions: [
+            TextButton(
+              child: const Text('取消'),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            TextButton(
+              child: const Text('确定'),
+              onPressed: () {
+                themeProvider.setReadingFontColor(pickerColor);
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
         );
       },
     );

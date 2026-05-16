@@ -14,6 +14,10 @@ class ThemeProvider with ChangeNotifier {
   static const String _doubleColumnEnabledKey = 'readingDoubleColumnEnabled';
   static const String _doubleColumnTriggerKey =
       'readingDoubleColumnTriggerWidth';
+  // 新增阅读页背景颜色持久化键
+  static const String _readingBgColorKey = 'readingBackgroundColor';
+  // 新增阅读页字体颜色持久化键
+  static const String _readingFontColorKey = 'readingFontColor';
 
   bool _isDarkMode = false;
   bool get isDarkMode => _isDarkMode;
@@ -30,6 +34,10 @@ class ThemeProvider with ChangeNotifier {
   double _paragraphSpacing = 0.0; // 通过在文本中插入空行实现
   bool _doubleColumnEnabled = false;
   double _doubleColumnTriggerWidth = 800.0; // 默认宽度阈值
+  // 背景颜色，默认白色
+  Color _readingBackgroundColor = Colors.white;
+  // 字体颜色，默认黑色（与之前的硬编码保持一致）
+  Color _readingFontColor = Colors.black87;
   bool _showChineseTitle = true;
   Color get primaryColor => _primaryColor;
   bool get followSystemAccent => _followSystemAccent;
@@ -55,6 +63,11 @@ class ThemeProvider with ChangeNotifier {
     _doubleColumnEnabled = prefs.getBool(_doubleColumnEnabledKey) ?? false;
     _doubleColumnTriggerWidth =
         prefs.getDouble(_doubleColumnTriggerKey) ?? 800.0;
+    // 读取阅读页背景颜色，若不存在则使用默认白色
+    final int? bgColorValue = prefs.getInt(_readingBgColorKey);
+    if (bgColorValue != null) {
+      _readingBackgroundColor = Color(bgColorValue);
+    }
     notifyListeners();
   }
 
@@ -103,6 +116,8 @@ class ThemeProvider with ChangeNotifier {
   double get readingParagraphSpacing => _paragraphSpacing;
   bool get doubleColumnEnabled => _doubleColumnEnabled;
   double get doubleColumnTriggerWidth => _doubleColumnTriggerWidth;
+  Color get readingBackgroundColor => _readingBackgroundColor;
+  Color get readingFontColor => _readingFontColor;
 
   Future<void> setReadingFontSize(double size) async {
     _fontSize = size;
@@ -143,6 +158,35 @@ class ThemeProvider with ChangeNotifier {
     _doubleColumnTriggerWidth = width;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble(_doubleColumnTriggerKey, width);
+    notifyListeners();
+  }
+
+  // 设置阅读页背景颜色并持久化
+  Future<void> setReadingBackgroundColor(Color color) async {
+    _readingBackgroundColor = color;
+    // 若背景为暗色且当前字体颜色也暗，则自动切换为白色以保证可读性
+    final brightness = ThemeData.estimateBrightnessForColor(color);
+    if (brightness == Brightness.dark) {
+      // 判断当前字体颜色亮度，若也是暗色则改为白色
+      final fontBrightness = ThemeData.estimateBrightnessForColor(
+        _readingFontColor,
+      );
+      if (fontBrightness != Brightness.light) {
+        _readingFontColor = Colors.white;
+        final prefsFont = await SharedPreferences.getInstance();
+        await prefsFont.setInt(_readingFontColorKey, _readingFontColor.value);
+      }
+    }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_readingBgColorKey, color.value);
+    notifyListeners();
+  }
+
+  // 设置阅读页字体颜色并持久化
+  Future<void> setReadingFontColor(Color color) async {
+    _readingFontColor = color;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_readingFontColorKey, color.value);
     notifyListeners();
   }
 

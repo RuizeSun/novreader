@@ -3,6 +3,7 @@ import 'package:novriidaa_reader/providers/theme_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:novriidaa_reader/pages/settings_category_page.dart';
+import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 
 /// 设置页面实现响应式双栏布局，并加入主题色选择功能。
 class SettingsPage extends StatefulWidget {
@@ -92,6 +93,48 @@ class _SettingsPageState extends State<SettingsPage> {
           );
         },
       ),
+    );
+  }
+
+  // 通用颜色选择弹窗，依据 isBackground 决定设置背景色还是字体色
+  void _showColorPicker(
+    BuildContext context,
+    ThemeProvider themeProvider, {
+    required bool isBackground,
+  }) {
+    Color pickerColor = isBackground
+        ? themeProvider.readingBackgroundColor
+        : themeProvider.readingFontColor;
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(isBackground ? '选择背景颜色' : '选择字体颜色'),
+          content: SingleChildScrollView(
+            child: BlockPicker(
+              pickerColor: pickerColor,
+              onColorChanged: (color) => pickerColor = color,
+            ),
+          ),
+          actions: [
+            TextButton(
+              child: const Text('取消'),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            TextButton(
+              child: const Text('确定'),
+              onPressed: () {
+                if (isBackground) {
+                  themeProvider.setReadingBackgroundColor(pickerColor);
+                } else {
+                  themeProvider.setReadingFontColor(pickerColor);
+                }
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -328,6 +371,110 @@ class _SettingsPageState extends State<SettingsPage> {
                   label: '${themeProvider.doubleColumnTriggerWidth.toInt()}',
                   onChanged: (v) =>
                       themeProvider.setDoubleColumnTriggerWidth(v),
+                ),
+              ),
+              // 背景颜色设置（预设颜色 + 自定义）
+              ListTile(
+                title: const Text('背景颜色'),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: 8,
+                      children:
+                          [
+                                Colors.white,
+                                const Color(0xFFF5F5D1),
+                                const Color(0xFFE0E0E0),
+                                const Color(0xFFB0B0B0),
+                                Colors.black,
+                              ]
+                              .map(
+                                (c) => GestureDetector(
+                                  onTap: () => themeProvider
+                                      .setReadingBackgroundColor(c),
+                                  child: Container(
+                                    width: 24,
+                                    height: 24,
+                                    decoration: BoxDecoration(
+                                      color: c,
+                                      border: Border.all(
+                                        color:
+                                            themeProvider
+                                                    .readingBackgroundColor ==
+                                                c
+                                            ? Colors.blueAccent
+                                            : Colors.transparent,
+                                        width: 2,
+                                      ),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                    ),
+                    const SizedBox(height: 8),
+                    ElevatedButton(
+                      onPressed: () => _showColorPicker(
+                        context,
+                        themeProvider,
+                        isBackground: true,
+                      ),
+                      child: const Text('自定义颜色'),
+                    ),
+                  ],
+                ),
+              ),
+              // 字体颜色设置（预设颜色 + 自定义）
+              ListTile(
+                title: const Text('字体颜色'),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: 8,
+                      children:
+                          [
+                                Colors.black,
+                                Colors.white,
+                                Colors.red,
+                                Colors.green,
+                                Colors.blue,
+                              ]
+                              .map(
+                                (c) => GestureDetector(
+                                  onTap: () =>
+                                      themeProvider.setReadingFontColor(c),
+                                  child: Container(
+                                    width: 24,
+                                    height: 24,
+                                    decoration: BoxDecoration(
+                                      color: c,
+                                      border: Border.all(
+                                        color:
+                                            themeProvider.readingFontColor == c
+                                            ? Colors.blueAccent
+                                            : Colors.transparent,
+                                        width: 2,
+                                      ),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                    ),
+                    const SizedBox(height: 8),
+                    ElevatedButton(
+                      onPressed: () => _showColorPicker(
+                        context,
+                        themeProvider,
+                        isBackground: false,
+                      ),
+                      child: const Text('自定义颜色'),
+                    ),
+                  ],
                 ),
               ),
             ],
