@@ -213,7 +213,9 @@ class _BookshelfPageState extends State<BookshelfPage> {
                 final book = _books[i];
                 if (book.bangumiSubjectId != null) {
                   return FutureBuilder<Subject>(
-                    future: BangumiService().getSubject(book.bangumiSubjectId!),
+                    future: BangumiService().getSubjectCached(
+                      book.bangumiSubjectId!,
+                    ),
                     builder: (c, snapshot) {
                       if (snapshot.connectionState != ConnectionState.done) {
                         return const ListTile(title: Text('加载中...'));

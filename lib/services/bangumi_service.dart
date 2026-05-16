@@ -6,6 +6,7 @@ import '../models/related_character.dart';
 import '../models/user.dart';
 import 'api_client.dart';
 import 'token_holder.dart';
+import '../utils/cache_helper.dart';
 
 class BangumiService {
   final ApiClient _apiClient = ApiClient();
@@ -119,6 +120,32 @@ class BangumiService {
     }
   }
 
+  /// Cached version of fetchTrendingBooksScrape.
+  /// Uses a 24‑hour TTL. The cached data is a list of JSON maps representing
+  /// `Subject` objects. When a cache miss occurs, the original scrape method is
+  /// invoked and the result is stored for future use.
+  Future<List<Subject>> fetchTrendingBooksCached({int limit = 30}) async {
+    const cacheKey = 'trending_books';
+    // Try to read from cache.
+    final cached = await CacheHelper.get<List<dynamic>>(cacheKey);
+    if (cached != null) {
+      // Convert cached JSON list back to Subject objects.
+      return cached
+          .map((e) => Subject.fromJson(e as Map<String, dynamic>))
+          .toList();
+    }
+    // Cache miss – fetch from network.
+    final result = await fetchTrendingBooksScrape(limit: limit);
+    // Store as JSON‑serializable list.
+    final jsonList = result.map((s) => s.toJson()).toList();
+    await CacheHelper.set<List<dynamic>>(
+      cacheKey,
+      jsonList,
+      const Duration(hours: 24),
+    );
+    return result;
+  }
+
   /// 使用爬虫方式获取热门书籍（按热度排序）
   ///
   /// 该方法直接请求 Bangumi 书籍浏览页面 `https://bgm.tv/book/browser/?sort=trends`
@@ -218,6 +245,22 @@ class BangumiService {
     } catch (e) {
       rethrow;
     }
+  }
+
+  /// Cached version of getSubject with a 7‑day TTL.
+  Future<Subject> getSubjectCached(int subjectId) async {
+    final cacheKey = 'subject_\$subjectId';
+    final cached = await CacheHelper.get<Map<String, dynamic>>(cacheKey);
+    if (cached != null) {
+      return Subject.fromJson(cached);
+    }
+    final subject = await getSubject(subjectId);
+    await CacheHelper.set<Map<String, dynamic>>(
+      cacheKey,
+      subject.toJson(),
+      const Duration(days: 7),
+    );
+    return subject;
   }
 
   /// 获取当前用户信息

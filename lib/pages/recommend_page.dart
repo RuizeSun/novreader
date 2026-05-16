@@ -58,9 +58,9 @@ class _RecommendPageState extends State<RecommendPage> {
       _error = null;
     });
     try {
-      final results = await _bangumiService.fetchTrendingBooksScrape(
+      // 使用缓存的热门书籍接口，缓存有效期 24 小时。
+      final results = await _bangumiService.fetchTrendingBooksCached(
         limit: _limit,
-        page: _currentPage,
       );
       if (!mounted) return;
       setState(() {
