@@ -79,6 +79,8 @@ class _ReadingPageState extends State<ReadingPage> {
 
   @override
   void dispose() {
+    // 在页面销毁时确保当前阅读进度已保存
+    _debounceSaveProgress(_currentPage.toDouble());
     _saveTimer?.cancel();
     _pageController.dispose();
     super.dispose();
@@ -146,15 +148,65 @@ class _ReadingPageState extends State<ReadingPage> {
     return '加载失败：$readableType\n——$errorMsg';
   }
 
-  /// 初始分頁
+  /// 初始分頁（基于字符偏移量恢复阅读进度）
   Future<void> _initialPagination() async {
     await Future.delayed(Duration.zero);
     if (!mounted) return;
 
-    // 分頁由 LayoutBuilder 在首次佈局時處理
-    // 此處僅恢復閱讀進度
-    final savedPage = widget.book.readingProgress?.toInt() ?? 0;
-    _currentPage = savedPage.clamp(
+    // 读取最新的进度偏移（字符数）
+    double? latestProgress;
+    try {
+      final books = await _repo.loadBooks();
+      final latest = books.firstWhere(
+        (b) => b.id == widget.book.id,
+        orElse: () => widget.book,
+      );
+      latestProgress = latest.readingProgress;
+    } catch (_) {
+      latestProgress = widget.book.readingProgress;
+    }
+
+    int offset = latestProgress?.toInt() ?? 0;
+    // 找到对应的章节
+    int accumulated = 0;
+    int targetChapter = 0;
+    for (int i = 0; i < _chapters.length; i++) {
+      int chapterLen = _chapters[i].length;
+      if (accumulated + chapterLen > offset) {
+        targetChapter = i;
+        break;
+      }
+      accumulated += chapterLen;
+    }
+    // 切换到目标章节并重新分页
+    _selectedChapter = targetChapter;
+    _extractChapterTitleAndBody(_selectedChapter);
+    // 使用当前布局尺寸进行分页（若尚未布局则使用屏幕尺寸的近似值）
+    final double w = MediaQuery.of(context).size.width - 32;
+    final double h =
+        MediaQuery.of(context).size.height -
+        kToolbarHeight -
+        MediaQuery.of(context).padding.top -
+        60;
+    _paginateWithTitle(
+      availableWidth: w,
+      availableHeight: h,
+      useDoubleColumn: false,
+    );
+
+    // 根据剩余 offset 确定页码
+    int chapterOffset = offset - accumulated;
+    int pageIdx = 0;
+    int pageAccum = 0;
+    for (int i = 0; i < _pages.length; i++) {
+      if (pageAccum + _pages[i].length > chapterOffset) {
+        pageIdx = i;
+        break;
+      }
+      pageAccum += _pages[i].length;
+    }
+    // 修正可能的偏移导致的前一页问题：将页码向前推进一页（若仍在范围内）
+    _currentPage = (pageIdx + 1).clamp(
       0,
       _pages.isNotEmpty ? _pages.length - 1 : 0,
     );
@@ -369,13 +421,27 @@ class _ReadingPageState extends State<ReadingPage> {
     _debounceSaveProgress(index.toDouble());
   }
 
-  void _debounceSaveProgress(double page) {
-    _saveTimer?.cancel();
-    _saveTimer = Timer(const Duration(seconds: 1), () async {
-      // 這裡可以同時保存 _selectedChapter
-      final updated = widget.book.copyWith(readingProgress: page);
-      await _repo.updateBook(updated);
-    });
+  /// 保存阅读进度为字符（字节）偏移量。
+  /// 计算方式：
+  ///   1. 所有章节在书籍中的累计字符数。
+  ///   2. 当前章节已分页的页面累计字符数。
+  ///   3. 将上述两者相加得到相对于整本书的偏移。
+  /// 立即保存阅读进度为字符（字节）偏移量。
+  /// 之前使用防抖计时器，导致在页面快速退出时进度可能未写入。
+  /// 现在改为同步写入，确保每次翻页后都能持久化。
+  void _debounceSaveProgress(double page) async {
+    // 计算当前章节之前的字符总长度
+    int offset = 0;
+    for (int i = 0; i < _selectedChapter; i++) {
+      offset += _chapters[i].length;
+    }
+    // 计算当前章节已分页的页面累计字符数
+    for (int i = 0; i < _currentPage; i++) {
+      if (i < _pages.length) offset += _pages[i].length;
+    }
+    // 保存偏移量（以 double 保存，保持模型兼容）
+    final updated = widget.book.copyWith(readingProgress: offset.toDouble());
+    await _repo.updateBook(updated);
   }
 
   void _goPrev() {
