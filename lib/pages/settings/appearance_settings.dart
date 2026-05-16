@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:novriidaa_reader/providers/theme_provider.dart';
+import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 
 /// 外观设置页面，原本在 SettingsPage 的 _buildAppearance 方法中实现。
 /// 现在抽离为独立的可复用组件。
@@ -94,41 +95,8 @@ class AppearanceSettings extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: ElevatedButton(
-                  onPressed: () async {
-                    final controller = TextEditingController();
-                    final result = await showDialog<String>(
-                      context: context,
-                      builder: (_) => AlertDialog(
-                        title: const Text('输入十六进制颜色值'),
-                        content: TextField(
-                          controller: controller,
-                          decoration: const InputDecoration(
-                            hintText: '#RRGGBB',
-                          ),
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.of(context).pop(),
-                            child: const Text('取消'),
-                          ),
-                          TextButton(
-                            onPressed: () =>
-                                Navigator.of(context).pop(controller.text),
-                            child: const Text('确定'),
-                          ),
-                        ],
-                      ),
-                    );
-                    if (result != null && result.isNotEmpty) {
-                      try {
-                        final hex = result.replaceAll('#', '');
-                        final color = Color(int.parse('FF$hex', radix: 16));
-                        await themeProvider.setPrimaryColor(color);
-                      } catch (_) {
-                        // ignore invalid input
-                      }
-                    }
-                  },
+                  onPressed: () =>
+                      _showPrimaryColorPicker(context, themeProvider),
                   child: const Text('自定义颜色'),
                 ),
               ),
@@ -136,6 +104,39 @@ class AppearanceSettings extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+
+  // 新增的颜色选择器方法，使用 BlockPicker 进行色盘选色
+  void _showPrimaryColorPicker(
+    BuildContext context,
+    ThemeProvider themeProvider,
+  ) {
+    Color pickerColor = themeProvider.primaryColor;
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('选择主题颜色'),
+        content: SingleChildScrollView(
+          child: BlockPicker(
+            pickerColor: pickerColor,
+            onColorChanged: (color) => pickerColor = color,
+          ),
+        ),
+        actions: [
+          TextButton(
+            child: const Text('取消'),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          TextButton(
+            child: const Text('确定'),
+            onPressed: () {
+              themeProvider.setPrimaryColor(pickerColor);
+              Navigator.of(context).pop();
+            },
+          ),
+        ],
+      ),
     );
   }
 }
