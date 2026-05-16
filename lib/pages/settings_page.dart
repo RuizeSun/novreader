@@ -360,18 +360,39 @@ class _SettingsPageState extends State<SettingsPage> {
                 value: themeProvider.doubleColumnEnabled,
                 onChanged: (v) => themeProvider.setDoubleColumnEnabled(v),
               ),
-              // 双栏触发宽度
-              ListTile(
-                title: const Text('双栏触发宽度 (px)'),
-                subtitle: Slider.adaptive(
-                  min: 600,
-                  max: 1200,
-                  divisions: 12,
-                  value: themeProvider.doubleColumnTriggerWidth,
-                  label: '${themeProvider.doubleColumnTriggerWidth.toInt()}',
-                  onChanged: (v) =>
-                      themeProvider.setDoubleColumnTriggerWidth(v),
-                ),
+              // 双栏触发宽度（仅在启用双栏布局时显示）
+              // 使用 AnimatedSwitcher 为显示/隐藏添加淡入淡出动画。
+              // 当未启用双栏布局时，返回一个占位的 SizedBox，避免布局异常。
+              // 使用 AnimatedSwitcher 添加符合 Material Design 曲线的非线性动画。
+              // 使用 AnimatedSwitcher 添加更轻量的淡入淡出动画，提高帧率。
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 500),
+                switchInCurve: Curves.fastOutSlowIn,
+                switchOutCurve: Curves.fastOutSlowIn,
+                transitionBuilder: (Widget child, Animation<double> animation) {
+                  // 仅使用 FadeTransition，避免额外的 ScaleTransition 带来的性能开销。
+                  final curved = CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.fastOutSlowIn,
+                  );
+                  return FadeTransition(opacity: curved, child: child);
+                },
+                child: themeProvider.doubleColumnEnabled
+                    ? ListTile(
+                        key: const ValueKey('doubleColumnTrigger'),
+                        title: const Text('双栏触发宽度 (px)'),
+                        subtitle: Slider.adaptive(
+                          min: 600,
+                          max: 1200,
+                          divisions: 12,
+                          value: themeProvider.doubleColumnTriggerWidth,
+                          label:
+                              '${themeProvider.doubleColumnTriggerWidth.toInt()}',
+                          onChanged: (v) =>
+                              themeProvider.setDoubleColumnTriggerWidth(v),
+                        ),
+                      )
+                    : const SizedBox.shrink(key: ValueKey('empty')),
               ),
               // 背景颜色设置（预设颜色 + 自定义）
               ListTile(
