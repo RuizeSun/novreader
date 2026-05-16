@@ -503,14 +503,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 applicationName: 'NovReader',
                 applicationVersion: version,
                 applicationIcon: const FlutterLogo(),
-                children: const [
-                  Text('基于 Bangumi API 构建的小说阅读器'),
-                  SizedBox(height: 8),
-                  Text(
-                    'API: https://bangumi.github.io/api/',
-                    style: TextStyle(color: Colors.blue, fontSize: 12),
-                  ),
-                ],
+                children: const [Text('基于 Bangumi API 构建的小说阅读器')],
               );
             },
           ),

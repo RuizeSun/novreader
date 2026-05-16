@@ -196,6 +196,41 @@ class ThemeProvider with ChangeNotifier {
     brightness: Brightness.light,
     primaryColor: _followSystemAccent ? Colors.blue : _primaryColor,
     scaffoldBackgroundColor: const Color(0xFFF5F5F5),
+    // 添加按钮和开关的主题，使其使用主色调
+    elevatedButtonTheme: ElevatedButtonThemeData(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: _followSystemAccent ? Colors.blue : _primaryColor,
+        foregroundColor: Colors.white,
+      ),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(
+        foregroundColor: _followSystemAccent ? Colors.blue : _primaryColor,
+      ),
+    ),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: _followSystemAccent ? Colors.blue : _primaryColor,
+        side: BorderSide(
+          color: _followSystemAccent ? Colors.blue : _primaryColor,
+        ),
+      ),
+    ),
+    switchTheme: SwitchThemeData(
+      thumbColor: MaterialStateProperty.resolveWith<Color>((states) {
+        if (states.contains(MaterialState.selected)) {
+          return _followSystemAccent ? Colors.blue : _primaryColor;
+        }
+        return Colors.grey;
+      }),
+      trackColor: MaterialStateProperty.resolveWith<Color>((states) {
+        if (states.contains(MaterialState.selected)) {
+          return (_followSystemAccent ? Colors.blue : _primaryColor)
+              .withOpacity(0.5);
+        }
+        return Colors.grey.withOpacity(0.5);
+      }),
+    ),
     appBarTheme: AppBarTheme(
       backgroundColor: _followSystemAccent ? Colors.blue : _primaryColor,
       foregroundColor: Colors.white,
@@ -212,12 +247,56 @@ class ThemeProvider with ChangeNotifier {
       unselectedItemColor: Colors.grey,
       type: BottomNavigationBarType.fixed,
     ),
+    // 为 Slider 添加主题，使其使用主色调
+    sliderTheme: SliderThemeData(
+      activeTrackColor: _followSystemAccent ? Colors.blue : _primaryColor,
+      inactiveTrackColor: (_followSystemAccent ? Colors.blue : _primaryColor)
+          .withOpacity(0.3),
+      thumbColor: _followSystemAccent ? Colors.blue : _primaryColor,
+      overlayColor: (_followSystemAccent ? Colors.blue : _primaryColor)
+          .withOpacity(0.2),
+    ),
   );
 
   ThemeData get darkTheme => ThemeData(
     brightness: Brightness.dark,
     primaryColor: _followSystemAccent ? Colors.blue : _primaryColor,
     scaffoldBackgroundColor: const Color(0xFF121212),
+    // 添加按钮和开关的主题，使其使用主色调（暗色主题）
+    elevatedButtonTheme: ElevatedButtonThemeData(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: _followSystemAccent ? Colors.blue : _primaryColor,
+        foregroundColor: Colors.white,
+      ),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(
+        foregroundColor: _followSystemAccent ? Colors.blue : _primaryColor,
+      ),
+    ),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: _followSystemAccent ? Colors.blue : _primaryColor,
+        side: BorderSide(
+          color: _followSystemAccent ? Colors.blue : _primaryColor,
+        ),
+      ),
+    ),
+    switchTheme: SwitchThemeData(
+      thumbColor: MaterialStateProperty.resolveWith<Color>((states) {
+        if (states.contains(MaterialState.selected)) {
+          return _followSystemAccent ? Colors.blue : _primaryColor;
+        }
+        return Colors.grey;
+      }),
+      trackColor: MaterialStateProperty.resolveWith<Color>((states) {
+        if (states.contains(MaterialState.selected)) {
+          return (_followSystemAccent ? Colors.blue : _primaryColor)
+              .withOpacity(0.5);
+        }
+        return Colors.grey.withOpacity(0.5);
+      }),
+    ),
     appBarTheme: AppBarTheme(
       backgroundColor: const Color(0xFF1E1E1E),
       foregroundColor: Colors.white,
@@ -233,6 +312,15 @@ class ThemeProvider with ChangeNotifier {
       selectedItemColor: _followSystemAccent ? Colors.blue : _primaryColor,
       unselectedItemColor: Colors.grey,
       type: BottomNavigationBarType.fixed,
+    ),
+    // 为 Slider 添加主题，使其在暗色模式下使用主色调
+    sliderTheme: SliderThemeData(
+      activeTrackColor: _followSystemAccent ? Colors.blue : _primaryColor,
+      inactiveTrackColor: (_followSystemAccent ? Colors.blue : _primaryColor)
+          .withOpacity(0.3),
+      thumbColor: _followSystemAccent ? Colors.blue : _primaryColor,
+      overlayColor: (_followSystemAccent ? Colors.blue : _primaryColor)
+          .withOpacity(0.2),
     ),
   );
 }
