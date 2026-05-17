@@ -240,7 +240,7 @@ class BangumiService {
         }
         return results;
       } else {
-        throw Exception('Failed to fetch page: \${response.statusCode}');
+        throw Exception('Failed to fetch page: ${response.statusCode}');
       }
     } catch (e) {
       rethrow;
@@ -249,7 +249,7 @@ class BangumiService {
 
   /// Cached version of getSubject with a 7‑day TTL.
   Future<Subject> getSubjectCached(int subjectId) async {
-    final cacheKey = 'subject_\$subjectId';
+    final cacheKey = 'subject_$subjectId';
     final cached = await CacheHelper.get<Map<String, dynamic>>(cacheKey);
     if (cached != null) {
       return Subject.fromJson(cached);

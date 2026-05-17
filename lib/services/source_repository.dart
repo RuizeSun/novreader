@@ -24,13 +24,20 @@ class SourceRepository {
     await prefs.setString(_key, jsonStr);
   }
 
-  /// 添加一条来源规则，如果 id 重复则抛出异常
+  /// 添加或更新一条来源规则。
+  ///
+  /// 如果已经存在相同 `id` 的规则，则会覆盖（更新）该规则；
+  /// 否则直接添加新规则。
   Future<void> addSource(SourceRule source) async {
     final sources = await loadSources();
-    if (sources.any((s) => s.id == source.id)) {
-      throw Exception('来源规则 ID "${source.id}" 已存在，无法重复添加');
+    final index = sources.indexWhere((s) => s.id == source.id);
+    if (index >= 0) {
+      // 已存在，进行覆盖更新
+      sources[index] = source;
+    } else {
+      // 不存在，直接添加
+      sources.add(source);
     }
-    sources.add(source);
     await _saveSources(sources);
   }
 

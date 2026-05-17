@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:novriidaa_reader/providers/source_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:novriidaa_reader/models/source_rule.dart';
 
 /// 来源管理页面，支持导入、删除 JSON 来源规则文件
@@ -16,13 +17,67 @@ class SourceManagementSettings extends StatefulWidget {
 }
 
 class _SourceManagementSettingsState extends State<SourceManagementSettings> {
+  // 是否已同意免责声明，默认 false
+  bool _hasAgreement = false;
   @override
   void initState() {
     super.initState();
-    // 页面初始化时加载来源列表
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<SourceProvider>().loadSources();
-    });
+    // 页面初始化时检查用户是否已同意免责声明
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkAgreement());
+  }
+
+  /// 检查用户是否已同意免责声明，若未同意则弹出对话框。
+  Future<void> _checkAgreement() async {
+    final prefs = await SharedPreferences.getInstance();
+    final agreed = prefs.getBool('source_management_agreed') ?? false;
+    if (!agreed) {
+      final result = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => AlertDialog(
+          title: const Text('免责声明'),
+          content: const SingleChildScrollView(
+            child: Text(
+              '本功能运行于您的设备，所有网络请求均由您的设备直接发起，本软件不提供任何中转、代理、缓存或内容分发服务。您需要自行配置指向您拥有合法访问权限的服务器（包括但不限于个人NAS、私有云、您租用的云服务器、自建主机等）的访问规则。\n\n您知悉并同意，若您配置的规则指向不属于您拥有合法访问权限的第三方服务器，则您可能面临包括但不限于设备感染病毒、木马、勒索软件，个人数据被窃取或篡改，账号凭证泄露等严重安全风险。因访问此类未经授权的第三方服务器而导致的任何直接或间接损失（包括但不限于设备损坏、数据丢失、隐私泄露、财产损失），本软件开发者不承担任何法律责任。即使访问的是您拥有合法权限的服务器，本软件亦不对该服务器的安全性、内容完整性及潜在恶意代码作任何明示或暗示的担保。您使用本软件获取的任何内容，其合法性、授权状态及潜在侵权风险均由您自行承担。禁止配置指向您没有合法访问权限的第三方服务器的规则。权利人如认为本软件被用于侵权，请通过 Github 仓库的 Issue 功能联系开发者，我们将在核实后采取合理措施。',
+            ),
+          ),
+          actions: [
+            TextButton(
+              child: const Text('不同意'),
+              onPressed: () => Navigator.of(context).pop(false),
+            ),
+            TextButton(
+              child: const Text('同意'),
+              onPressed: () => Navigator.of(context).pop(true),
+            ),
+          ],
+        ),
+      );
+      if (result == true) {
+        await prefs.setBool('source_management_agreed', true);
+        if (mounted) {
+          setState(() {
+            _hasAgreement = true;
+          });
+          context.read<SourceProvider>().loadSources();
+        }
+      } else {
+        // 不同意则保持未同意状态，若在双栏模式下不进行页面跳转
+        if (mounted) {
+          setState(() {
+            _hasAgreement = false;
+          });
+        }
+      }
+    } else {
+      // 已同意，直接加载来源列表
+      if (mounted) {
+        setState(() {
+          _hasAgreement = true;
+        });
+        context.read<SourceProvider>().loadSources();
+      }
+    }
   }
 
   Future<void> _importSource() async {
@@ -120,6 +175,22 @@ class _SourceManagementSettingsState extends State<SourceManagementSettings> {
   Widget build(BuildContext context) {
     return Consumer<SourceProvider>(
       builder: (context, sourceProvider, child) {
+        // 若未同意免责声明，则在双栏模式下直接展示提示，阻止操作。
+        if (!_hasAgreement) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('请先阅读并同意免责声明后才能使用来源管理。'),
+                const SizedBox(height: 12),
+                ElevatedButton(
+                  onPressed: _checkAgreement,
+                  child: const Text('阅读并同意'),
+                ),
+              ],
+            ),
+          );
+        }
         return Column(
           children: [
             // 导入按钮区域

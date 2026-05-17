@@ -25,15 +25,32 @@ class _BookshelfPageState extends State<BookshelfPage> {
   final BookRepository _repo = BookRepository();
   List<Book> _books = [];
 
-  @override
-  void initState() {
-    super.initState();
+  // Listener to refresh the shelf when the repository notifies changes.
+  void _onRepositoryChanged() {
+    // Fire and forget; errors are handled inside _loadBooks.
     _loadBooks();
   }
 
+  @override
+  void initState() {
+    super.initState();
+    // Initial load.
+    _loadBooks();
+    // Subscribe to repository changes.
+    BookRepository.notifier.addListener(_onRepositoryChanged);
+  }
+
+  @override
+  void dispose() {
+    // Clean up the listener to avoid memory leaks.
+    BookRepository.notifier.removeListener(_onRepositoryChanged);
+    super.dispose();
+  }
+
   Future<void> _loadBooks() async {
-    final books = await _repo.loadBooks();
-    setState(() => _books = books);
+    final allBooks = await _repo.loadBooks();
+    // 只显示已加入书架（isOnShelf == true）的书籍
+    setState(() => _books = allBooks.where((b) => b.isOnShelf).toList());
   }
 
   /// 导入本地 txt 文件并保存到适当的应用支持目录（跨平台）
@@ -86,6 +103,7 @@ class _BookshelfPageState extends State<BookshelfPage> {
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       title: file.uri.pathSegments.last,
       filePath: destPath,
+      isOnShelf: true, // 本地导入的书籍默认加入书架
     );
     await _repo.addBook(book);
     await _loadBooks();

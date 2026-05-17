@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:gbk_codec/gbk_codec.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
@@ -119,8 +121,33 @@ class _ReadingPageState extends State<ReadingPage> {
     }
   }
 
-  static Future<String> _readFile(String path) async =>
-      File(path).readAsString();
+  // 读取文件内容，自动检测编码（UTF‑8 / GBK），避免乱码问题。
+  // 有些来源获取的书籍为 GBK 编码，用 UTF‑8 直接读取会出现「锟斤拷」乱码。
+  // 策略：先尝试 UTF‑8（严格模式），失败后尝试 GBK。
+  static Future<String> _readFile(String path) async {
+    // 读取原始字节
+    final bytes = await File(path).readAsBytes();
+
+    // 优先尝试严格 UTF‑8 解码
+    try {
+      return utf8.decode(bytes);
+    } on FormatException {
+      // UTF‑8 解码失败，尝试 GBK
+      try {
+        return gbk.decode(bytes);
+      } catch (_) {
+        // 兜底：容忍非法字节
+        return utf8.decode(bytes, allowMalformed: true);
+      }
+    } on ArgumentError {
+      // "not well-formed UTF-16" — 说明字节流不是有效 UTF‑8
+      try {
+        return gbk.decode(bytes);
+      } catch (_) {
+        return utf8.decode(bytes, allowMalformed: true);
+      }
+    }
+  }
 
   /// 格式化錯誤訊息，顯示具體的錯誤類型和原因
   String _formatErrorMessage(Object e) {
@@ -167,6 +194,7 @@ class _ReadingPageState extends State<ReadingPage> {
     }
 
     int offset = latestProgress?.toInt() ?? 0;
+
     // 找到对应的章节
     int accumulated = 0;
     int targetChapter = 0;
@@ -178,46 +206,58 @@ class _ReadingPageState extends State<ReadingPage> {
       }
       accumulated += chapterLen;
     }
-    // 切换到目标章节并重新分页
-    _selectedChapter = targetChapter;
+    _selectedChapter = targetChapter.clamp(0, _chapters.length - 1);
+
+    // 提取当前章节的标题和正文
     _extractChapterTitleAndBody(_selectedChapter);
-    // 使用当前布局尺寸进行分页（若尚未布局则使用屏幕尺寸的近似值）
-    final double w = MediaQuery.of(context).size.width - 32;
-    final double h =
-        MediaQuery.of(context).size.height -
-        kToolbarHeight -
-        MediaQuery.of(context).padding.top -
-        60;
-    _paginateWithTitle(
-      availableWidth: w,
-      availableHeight: h,
-      useDoubleColumn: false,
-    );
 
-    // 根据剩余 offset 确定页码
-    int chapterOffset = offset - accumulated;
-    int pageIdx = 0;
-    int pageAccum = 0;
-    for (int i = 0; i < _pages.length; i++) {
-      if (pageAccum + _pages[i].length > chapterOffset) {
-        pageIdx = i;
-        break;
-      }
-      pageAccum += _pages[i].length;
-    }
-    // 修正可能的偏移导致的前一页问题：将页码向前推进一页（若仍在范围内）
-    _currentPage = (pageIdx + 1).clamp(
-      0,
-      _pages.isNotEmpty ? _pages.length - 1 : 0,
-    );
-
-    setState(() {});
-
+    // 重新分页。这里需要确保获取到正确的布局尺寸，避免使用近似值导致的问题。
+    // 延迟到下一帧，等待 LayoutBuilder 提供准确尺寸。
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_pageController.hasClients) {
-        _pageController.jumpToPage(_currentPage);
-      }
+      if (!mounted) return;
+      // 在 LayoutBuilder 内部会进行分页，这里只需触发 UI 更新
+      // _lastLayoutWidth 和 _lastLayoutHeight 会在 LayoutBuilder 中更新并触发重新分页
+      setState(() {
+        // 根据剩余 offset 确定页码
+        int chapterOffset = offset - accumulated;
+        int pageIdx = 0;
+        int pageAccum = 0;
+        for (int i = 0; i < _pages.length; i++) {
+          if (i < _pages.length &&
+              pageAccum + _pages[i].length > chapterOffset) {
+            pageIdx = i;
+            break;
+          }
+          pageAccum += _pages[i].length;
+        }
+
+        _currentPage = (pageIdx).clamp(
+          0,
+          _pages.isNotEmpty ? _pages.length - 1 : 0,
+        );
+
+        if (_pageController.hasClients) {
+          _pageController.jumpToPage(_currentPage);
+        }
+      });
     });
+  }
+
+  /// 调整位置，确保不切断 UTF-16 代理对（surrogate pair）
+  int _adjustSurrogateBoundary(String text, int pos) {
+    if (pos <= 0 || pos >= text.length) return pos;
+    final prev = text.codeUnitAt(pos - 1);
+    final next = text.codeUnitAt(pos);
+    // 如果前一个字符是高代理（0xD800-0xDBFF）且当前是低代理（0xDC00-0xDFFF），
+    // 说明 pos 正位于代理对中间，需要前进一位以包含整个代理对
+    if (prev >= 0xD800 && prev <= 0xDBFF && next >= 0xDC00 && next <= 0xDFFF) {
+      return pos + 1;
+    }
+    // 如果当前是低代理（说明前一个字符是高代理被切断了），后退一位
+    if (next >= 0xDC00 && next <= 0xDFFF) {
+      return pos - 1;
+    }
+    return pos;
   }
 
   /// 二分查找：在 [targetLines] 行内容纳的最多字符数
@@ -232,15 +272,17 @@ class _ReadingPageState extends State<ReadingPage> {
 
     while (low < high) {
       final int mid = (low + high + 1) ~/ 2;
+      // 调整 mid 避免切断 UTF-16 代理对
+      final int safeMid = _adjustSurrogateBoundary(text, mid);
       final tp = TextPainter(
         textDirection: TextDirection.ltr,
-        text: TextSpan(text: text.substring(0, mid), style: _textStyle),
+        text: TextSpan(text: text.substring(0, safeMid), style: _textStyle),
       );
       tp.layout(maxWidth: width);
       if (tp.computeLineMetrics().length <= targetLines) {
-        low = mid;
+        low = safeMid;
       } else {
-        high = mid - 1;
+        high = safeMid - 1;
       }
     }
     return low;
@@ -439,8 +481,16 @@ class _ReadingPageState extends State<ReadingPage> {
     for (int i = 0; i < _currentPage; i++) {
       if (i < _pages.length) offset += _pages[i].length;
     }
+    // 从仓库中加载该书籍的最新记录，保留可能被外部更新的字段（如 isOnShelf）
+    final books = await _repo.loadBooks();
+    Book latest;
+    try {
+      latest = books.firstWhere((b) => b.id == widget.book.id);
+    } catch (_) {
+      latest = widget.book;
+    }
     // 保存偏移量（以 double 保存，保持模型兼容）
-    final updated = widget.book.copyWith(readingProgress: offset.toDouble());
+    final updated = latest.copyWith(readingProgress: offset.toDouble());
     await _repo.updateBook(updated);
   }
 
@@ -513,6 +563,7 @@ class _ReadingPageState extends State<ReadingPage> {
     if (useDoubleColumn) {
       final int pageCount = (_pages.length + 1) ~/ 2;
       return PageView.builder(
+        key: const ValueKey('reader_double_column'),
         controller: _pageController,
         onPageChanged: _onPageChanged,
         itemCount: pageCount,
@@ -560,6 +611,7 @@ class _ReadingPageState extends State<ReadingPage> {
 
     // 單欄默認實現。
     return PageView.builder(
+      key: const ValueKey('reader_single_column'),
       controller: _pageController,
       onPageChanged: _onPageChanged,
       itemCount: _pages.length,
@@ -712,7 +764,7 @@ class _ReadingPageState extends State<ReadingPage> {
                     final double availableWidth = constraints.maxWidth - 32;
                     final double availableHeight = constraints.maxHeight;
 
-                    // 檢測尺寸或文字樣式變化，重新分頁
+                    // 检測尺寸或文字樣式變化，重新分頁
                     final double curTitleFontSize =
                         themeProvider.readingTitleFontSize;
                     if (availableWidth != _lastLayoutWidth ||
@@ -745,7 +797,7 @@ class _ReadingPageState extends State<ReadingPage> {
                         WidgetsBinding.instance.addPostFrameCallback((_) {
                           if (!mounted) return;
                           // 读取标题真实渲染高度
-                          final titleBox =
+                          final RenderBox? titleBox =
                               _titleKey.currentContext?.findRenderObject()
                                   as RenderBox?;
                           if (titleBox != null) {
@@ -761,6 +813,7 @@ class _ReadingPageState extends State<ReadingPage> {
                               );
                             }
                           }
+
                           final int maxPage = useDoubleColumn
                               ? ((_pages.length + 1) ~/ 2) - 1
                               : _pages.length - 1;
@@ -774,6 +827,38 @@ class _ReadingPageState extends State<ReadingPage> {
                           setState(() {});
                         });
                       }
+                    }
+
+                    // 确保 _initTask 完成后才进行分页
+                    if (snapshot.connectionState == ConnectionState.done &&
+                        _pages.isEmpty &&
+                        _chapters.isNotEmpty) {
+                      // 如果 _pages 为空，说明初始化分页可能失败，尝试重新分页
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (mounted) {
+                          final bool useDoubleColumn =
+                              themeProvider.doubleColumnEnabled &&
+                              constraints.maxWidth >=
+                                  themeProvider.doubleColumnTriggerWidth;
+                          _paginateWithTitle(
+                            availableWidth: availableWidth,
+                            availableHeight: availableHeight,
+                            useDoubleColumn: useDoubleColumn,
+                          );
+                          // 再次确保跳转到正确的页码
+                          final int maxPage = useDoubleColumn
+                              ? ((_pages.length + 1) ~/ 2) - 1
+                              : _pages.length - 1;
+                          final clampedPage = _currentPage.clamp(0, maxPage);
+                          if (clampedPage != _currentPage) {
+                            _currentPage = clampedPage;
+                            if (_pageController.hasClients) {
+                              _pageController.jumpToPage(clampedPage);
+                            }
+                          }
+                          setState(() {});
+                        }
+                      });
                     }
 
                     return Listener(
