@@ -5,6 +5,7 @@ import 'package:novriidaa_reader/pages/settings_category_page.dart';
 import 'package:novriidaa_reader/pages/settings/appearance_settings.dart';
 import 'package:novriidaa_reader/pages/settings/reading_settings.dart';
 import 'package:novriidaa_reader/pages/settings/about_settings.dart';
+import 'package:novriidaa_reader/pages/settings/source_management_settings.dart';
 
 /// 设置页面实现响应式双栏布局，并加入主题色选择功能。
 class SettingsPage extends StatefulWidget {
@@ -16,7 +17,7 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   // 分类列表，新增 "阅读页设置" 项目。
-  final List<String> _categories = const ['外观', '阅读页设置', '关于'];
+  final List<String> _categories = const ['外观', '阅读页设置', '来源管理', '关于'];
   int _selectedIndex = 0;
 
   @override
@@ -66,6 +67,9 @@ class _SettingsPageState extends State<SettingsPage> {
                     case '阅读页设置':
                       child = const ReadingSettings();
                       break;
+                    case '来源管理':
+                      child = const SourceManagementSettings();
+                      break;
                     case '关于':
                       child = const AboutSettings();
                       break;
@@ -97,6 +101,8 @@ class _SettingsPageState extends State<SettingsPage> {
         return const AppearanceSettings();
       case '阅读页设置':
         return const ReadingSettings();
+      case '来源管理':
+        return const SourceManagementSettings();
       case '关于':
         return const AboutSettings();
       default:

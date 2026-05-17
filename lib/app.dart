@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'providers/theme_provider.dart';
 import 'providers/user_provider.dart';
+import 'providers/source_provider.dart';
 import 'pages/main_page.dart';
 import 'pages/search_page.dart';
 import 'pages/settings_page.dart';
@@ -16,6 +17,7 @@ class NovriidaaApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(create: (_) => UserProvider()),
+        ChangeNotifierProvider(create: (_) => SourceProvider()),
       ],
       child: Consumer2<ThemeProvider, UserProvider>(
         builder: (context, themeProvider, userProvider, child) {
